@@ -22,10 +22,7 @@ find_package(catkin REQUIRED COMPONENTS
 
 find_package(OpenCV REQUIRED)
 find_package(PCL REQUIRED)
-
 find_package(Boost REQUIRED COMPONENTS signals thread)
-
-### NO.4 Python module support
 
 ### NO.5 Message / Service / Action Generator
 add_message_files( DIRECTORY msg FILES VisoInfo.msg)
@@ -40,18 +37,13 @@ generate_messages(
 catkin_package()
 
 ### NO.8 libraries / excutables
-add_definitions(-Wall -march=native -O3)
-
-include_directories(src ${libviso2_INCLUDE_DIRS} ${catkin_INCLUDE_DIRS})
-include_directories(${Boost_INCLUDE_DIRS})
 
 add_executable(stereo_odometer
   src/stereo_odometer.cpp)
-add_dependencies(stereo_odometer ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
-#add_dependencies(stereo_odometer ${PROJECT_NAME}_gencpp)
 
-
-#target_link_libraries(stereo_odometer ${OpenCV_LIBRARIES} ${catkin_LIBRARIES})
-
+target_include_directories( stereo_odometer
+  PUBLIC
+    ${catkin_INCLUDE_DIRS}
+)
 
 target_link_libraries(stereo_odometer ${Boost_LIBRARIES} ${catkin_LIBRARIES})

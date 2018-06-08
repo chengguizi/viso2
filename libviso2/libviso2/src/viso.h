@@ -1,24 +1,3 @@
-/*
-Copyright 2011. All rights reserved.
-Institute of Measurement and Control Systems
-Karlsruhe Institute of Technology, Germany
-
-This file is part of libviso2.
-Authors: Andreas Geiger
-
-libviso2 is free software; you can redistribute it and/or modify it under the
-terms of the GNU General Public License as published by the Free Software
-Foundation; either version 2 of the License, or any later version.
-
-libviso2 is distributed in the hope that it will be useful, but WITHOUT ANY
-WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
-PARTICULAR PURPOSE. See the GNU General Public License for more details.
-
-You should have received a copy of the GNU General Public License along with
-libviso2; if not, write to the Free Software Foundation, Inc., 51 Franklin
-Street, Fifth Floor, Boston, MA 02110-1301, USA 
-*/
-
 #ifndef VISO_H
 #define VISO_H
 
@@ -34,6 +13,7 @@ public:
     double f;  // focal length (in pixels)
     double cu; // principal point (u-coordinate)
     double cv; // principal point (v-coordinate)
+	
     calibration () {
       f  = 1;
       cu = 0;
@@ -43,10 +23,12 @@ public:
   
   // bucketing parameters
   struct bucketing {  
+	  int32_t bucket_ornot;
     int32_t max_features;  // maximal number of features per bucket 
     double  bucket_width;  // width of bucket
     double  bucket_height; // height of bucket
     bucketing () {
+	    bucket_ornot = 0;
       max_features  = 2;
       bucket_width  = 50;
       bucket_height = 50;
@@ -71,9 +53,9 @@ public:
   // call this function instead of the specialized ones, if you already have
   // feature matches, and simply want to compute visual odometry from them, without
   // using the internal matching functions.
-  bool process (std::vector<Matcher::p_match> p_matched_) {
+  bool process(std::vector<Matcher::p_match> p_matched_) {
     p_matched = p_matched_;
-    return updateMotion();
+	return updateMotion();
   }
 
   // returns transformation from previous to current coordinates as a 4x4
@@ -93,7 +75,7 @@ public:
   
   // returns the number of inliers: num_inliers <= num_matched
   int32_t getNumberOfInliers () { return inliers.size(); }
-    
+
   // returns the indices of all inliers
   std::vector<int32_t> getInlierIndices () { return inliers; }
   
@@ -114,7 +96,7 @@ public:
 protected:
 
   // calls bucketing and motion estimation
-  bool updateMotion ();
+	bool updateMotion();
 
   // compute transformation matrix from transformation vector  
   Matrix transformationVectorToMatrix (std::vector<double> tr);
@@ -124,7 +106,7 @@ protected:
   virtual std::vector<double> estimateMotion (std::vector<Matcher::p_match> p_matched) = 0;
   
   // get random and unique sample of num numbers from 1:N
-  std::vector<int32_t> getRandomSample (int32_t N,int32_t num);
+  std::vector<int32_t> getRandomSample(int32_t N, int32_t num);
 
   Matrix                         Tr_delta;   // transformation (previous -> current frame)  
   bool                           Tr_valid;   // motion estimate exists?
@@ -134,7 +116,7 @@ protected:
   double                        *p_observe;  // observed 2d points
   double                        *p_predict;  // predicted 2d points
   std::vector<Matcher::p_match>  p_matched;  // feature point matches
-  
+
 private:
   
   parameters                    param;     // common parameters

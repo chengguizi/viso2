@@ -1,4 +1,4 @@
-/*
+﻿/*
 Copyright 2012. All rights reserved.
 Institute of Measurement and Control Systems
 Karlsruhe Institute of Technology, Germany
@@ -26,9 +26,7 @@ Street, Fifth Floor, Boston, MA 02110-1301, USA
 #include "filter.h"
 
 // define fixed-width datatypes for Visual Studio projects
-#ifndef _MSC_VER
-  #include <stdint.h>
-#else
+#if defined(_MSC_VER) && (_MSC_VER < 1600)
   typedef __int8            int8_t;
   typedef __int16           int16_t;
   typedef __int32           int32_t;
@@ -37,6 +35,8 @@ Street, Fifth Floor, Boston, MA 02110-1301, USA
   typedef unsigned __int16  uint16_t;
   typedef unsigned __int32  uint32_t;
   typedef unsigned __int64  uint64_t;
+#else
+  #include <stdint.h>
 #endif
 
 // fast filters: implements 3x3 and 5x5 sobel filters and 
@@ -465,4 +465,60 @@ namespace filter {
     }
     _mm_free( integral );
   }
+
+  // Local Binary Pattern
+  void LBP8(const uint8_t* in, uint8_t* out, int w, int h) {
+	  
+	  unsigned center = 0;                                     
+	  unsigned center_lbp = 0;                             
+
+	  for (int row = 1; row < h - 1; row++)
+	  {
+		  for (int col = 1; col < w - 1; col++)
+		  {
+			  center = *(in + row * w + col);
+			  center_lbp = 0;
+
+			  if (center <= *(in + (row - 1) * w + col - 1))
+				  center_lbp += 1;
+
+			  if (center <= *(in + (row - 1) * w + col))
+				  center_lbp += 2;
+
+			  if (center <= *(in + (row - 1) * w + col + 1))
+				  center_lbp += 4;
+
+			  if (center <= *(in + row * w + col - 1))
+				  center_lbp += 8;
+
+			  if (center <= *(in + row * w + col + 1))
+				  center_lbp += 16;
+
+			  if (center <= *(in + (row + 1) * w + col - 1))
+				  center_lbp += 32;
+
+			  if (center <= *(in + (row + 1) * w + col))
+				  center_lbp += 64;
+
+			  if (center <= *(in + (row + 1) * w + col + 1))
+				  center_lbp += 128;
+			  *(out + row * w + col) = center_lbp;       
+		  }
+	  }
+  }
+
+  bool checkUniformLBP(unsigned value){
+
+	  unsigned uniformValue[] = { 0, 1, 2, 3, 4, 6, 7, 8, 12, 14, 15, 16, 24, 28, 30, 31, 32,
+								48, 56, 60, 62, 63, 64, 96, 112, 120, 124, 126, 127, 128, 129, 
+								131, 135, 143, 159, 191, 192, 193, 195, 199, 207, 223, 224, 225, 
+								227, 231, 239, 240, 241, 243, 247, 248, 249, 251, 252, 253, 254, 255 };
+
+	  for (unsigned &toCompare : uniformValue){
+		  if (value == toCompare) return true;
+	  }
+
+	  return false;
+  }
+
 };

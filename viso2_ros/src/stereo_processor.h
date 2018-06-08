@@ -51,9 +51,9 @@ private:
               const sensor_msgs::CameraInfoConstPtr& l_info_msg,
               const sensor_msgs::CameraInfoConstPtr& r_info_msg)
   {
-
+ 
     // For sync error checking
-    ++all_received_;
+    ++all_received_; 
 
     // call implementation
     imageCallback(l_image_msg, r_image_msg, l_info_msg, r_info_msg);
@@ -62,7 +62,7 @@ private:
   void checkInputsSynchronized()
   {
     int threshold = 3 * all_received_;
-    if (left_received_ >= threshold || right_received_ >= threshold ||
+    if (left_received_ >= threshold || right_received_ >= threshold || 
         left_info_received_ >= threshold || right_info_received_ >= threshold) {
       ROS_WARN("[stereo_processor] Low number of synchronized left/right/left_info/right_info tuples received.\n"
                "Left images received:       %d (topic '%s')\n"
@@ -101,23 +101,24 @@ protected:
 
     // Resolve topic names
     ros::NodeHandle nh;
-    std::string stereo_ns = nh.resolveName("stereo");
-    std::string left_topic = ros::names::clean(stereo_ns + "/left/" + nh.resolveName("image"));
-    std::string right_topic = ros::names::clean(stereo_ns + "/right/" + nh.resolveName("image"));
+    std::string left_topic = "/left/image_rect" ;
+    std::string right_topic = "/right/image_rect" ;
 
-    std::string left_info_topic = stereo_ns + "/left/camera_info";
-    std::string right_info_topic = stereo_ns + "/right/camera_info";
+    std::string left_info_topic = "/cam1/camera_info";
+    std::string right_info_topic = "/cam0/camera_info";
+    // std::string left_info_topic = "/cam1/camera_info";
+    // std::string right_info_topic = "/cam0/camera_info";
 
     // Subscribe to four input topics.
-    ROS_INFO("Subscribing to:\n\t* %s\n\t* %s\n\t* %s\n\t* %s",
+    ROS_INFO("Viso2_ROS: Subscribing to:\n\t* %s\n\t* %s\n\t* %s\n\t* %s", 
         left_topic.c_str(), right_topic.c_str(),
         left_info_topic.c_str(), right_info_topic.c_str());
 
     image_transport::ImageTransport it(nh);
-    left_sub_.subscribe(it, left_topic, 3, transport);
-    right_sub_.subscribe(it, right_topic, 3, transport);
-    left_info_sub_.subscribe(nh, left_info_topic, 3);
-    right_info_sub_.subscribe(nh, right_info_topic, 3);
+    left_sub_.subscribe(it, left_topic, 1, transport);
+    right_sub_.subscribe(it, right_topic, 1, transport);
+    left_info_sub_.subscribe(nh, left_info_topic, 1);
+    right_info_sub_.subscribe(nh, right_info_topic, 1);
 
     // Complain every 15s if the topics appear unsynchronized
     left_sub_.registerCallback(boost::bind(StereoProcessor::increment, &left_received_));
@@ -146,7 +147,7 @@ protected:
   }
 
   /**
-   * Implement this method in sub-classes
+   * Implement this method in sub-classes 
    */
   virtual void imageCallback(const sensor_msgs::ImageConstPtr& l_image_msg,
                              const sensor_msgs::ImageConstPtr& r_image_msg,

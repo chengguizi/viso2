@@ -3,6 +3,7 @@ project(libviso2)
 
 find_package(catkin REQUIRED )
 find_package(OpenCV REQUIRED )
+find_package(PNG REQUIRED )
 
 #set(CMAKE_CXX_FLAGS "-msse3")
 add_compile_options(-msse3)
@@ -32,6 +33,15 @@ target_include_directories(libviso2
 )
 
 target_link_libraries(libviso2
+  ${OpenCV_LIBRARIES}
+)
+
+add_executable(demo_rs2
+  libviso2/src/demo_rs2.cpp)
+
+target_link_libraries(demo_rs2
+  png
+  libviso2
   ${OpenCV_LIBRARIES}
 )
 

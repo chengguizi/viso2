@@ -8,6 +8,8 @@
 #include <opencv2/imgproc/imgproc.hpp> 
 #include <opencv2/features2d/features2d.hpp>
 
+#include <algorithm>    // std::sort
+
 // fast cpp version
 #include "fast.h"
 
@@ -179,15 +181,14 @@ void Matcher::pushBack(uint8_t *I1, uint8_t* I2, int32_t* dims, const bool repla
 
 void Matcher::matchFeatures()
 {
+	p_matched_1.clear();
+	p_matched_2.clear();
 
 	if (m1p2 == 0 || n1p2 == 0 || m2p2 == 0 || n2p2 == 0 || m1c2 == 0 || n1c2 == 0 || m2c2 == 0 || n2c2 == 0)
 		return;
 	if (param.multi_stage)
 		if (m1p1 == 0 || n1p1 == 0 || m2p1 == 0 || n2p1 == 0 || m1c1 == 0 || n1c1 == 0 || m2c1 == 0 || n2c1 == 0)
 			return;
-
-	p_matched_1.clear();
-	p_matched_2.clear();
 
 	if (param.multi_stage)
 	{
@@ -219,26 +220,33 @@ void Matcher::bucketFeatures(int32_t max_features, float bucket_width, float buc
 
 	// find max values
 	float u_max = 0;
+	float u_min = 1e5;
 	float v_max = 0;
-	for (vector<p_match>::iterator it = p_matched_2.begin(); it != p_matched_2.end(); it++)
+	float v_min = 1e5;
+	for (auto it :  p_matched_2)
 	{
-		if (it->u1c > u_max)
-			u_max = it->u1c;             // maximum u,v feature position in current left image
-		if (it->v1c > v_max)
-			v_max = it->v1c;
+		if (it.u1c > u_max)
+			u_max = it.u1c;             // maximum u,v feature position in current left image
+		if (it.u1c < u_min)
+			u_min = it.u1c;
+
+		if (it.v1c > v_max)
+			v_max = it.v1c;
+		if (it.v1c < v_min)
+			v_min = it.v1c;
 	}
 
 	// allocate number of buckets needed
-	int32_t bucket_cols = (int32_t)floor(u_max / bucket_width) + 1;        // number of bucket in cols to cover all matched features
-	int32_t bucket_rows = (int32_t)floor(v_max / bucket_height) + 1;	   // number of bucket in rows to cover all matched features
+	int32_t bucket_cols = (int32_t)floor( (u_max-u_min) / bucket_width) + 1;        // number of bucket in cols to cover all matched features
+	int32_t bucket_rows = (int32_t)floor( (v_max-v_min) / bucket_height) + 1;	   // number of bucket in rows to cover all matched features
 	vector<p_match> *buckets = new vector<p_match>[bucket_cols*bucket_rows];	// total number of bucket stored in a vector
 
 	// assign matches to their buckets
-	for (vector<p_match>::iterator it = p_matched_2.begin(); it != p_matched_2.end(); it++)
+	for (auto it : p_matched_2)
 	{
-		int32_t u = (int32_t)floor(it->u1c / bucket_width);                // extract u,v coordinates of matched features and find their buckets
-		int32_t v = (int32_t)floor(it->v1c / bucket_height);
-		buckets[v*bucket_cols + u].push_back(*it);							// store matched features <p_macth> in corresponding buckets
+		int32_t u = (int32_t)floor( (it.u1c - u_min ) / bucket_width);                // extract u,v coordinates of matched features and find their buckets
+		int32_t v = (int32_t)floor( (it.v1c - v_min ) / bucket_height);
+		buckets[v*bucket_cols + u].push_back(it);							// store matched features <p_macth> in corresponding buckets
 	}
 
 	// refill p_matched from buckets
@@ -247,7 +255,7 @@ void Matcher::bucketFeatures(int32_t max_features, float bucket_width, float buc
 	for (int32_t i = 0; i < bucket_cols*bucket_rows; i++)
 	{
 		// shuffle bucket indices randomly
-		std::random_shuffle(buckets[i].begin(), buckets[i].end());
+		//std::random_shuffle(buckets[i].begin(), buckets[i].end());
 
 		// add up to max_features features from this bucket to p_matched
 		int32_t k = 0;
@@ -653,7 +661,7 @@ inline void Matcher::findMatch(int32_t* m1, const int32_t &i1, int32_t* m2, cons
 	int32_t& min_ind, int32_t stage, bool flow, bool use_prior, double u_, double v_)
 {
 	// init and load image coordinates + feature
-	min_ind = 0;
+	min_ind = -1;
 	double  min_cost = 10000000;
 	// u,v,c stored in maxima struct
 	int32_t u1 = *(m1 + step_size*i1 + 0);
@@ -754,7 +762,7 @@ void Matcher::matching(int32_t *m1p, int32_t *m2p, int32_t *m1c, int32_t *m2c,
 
 	// loop variables
 	int32_t* M = (int32_t*)calloc(dims_c[0] * dims_c[1], sizeof(int32_t));                  // prepare for p_match
-	int32_t i1p, i2p, i1c, i2c, i1p2;
+	int32_t i1p=0, i2p=0, i1c=0, i2c=0, i1p2=0;
 	int32_t u1p, v1p, u2p, v2p, u1c, v1c, u2c, v2c;
 
 	// create position/class bin index vectors (position/class of features are stored in m1p1,m1p2,m2p1,m2p2,m1c1,m1c2,m2c1,m2c2);
@@ -789,8 +797,12 @@ void Matcher::matching(int32_t *m1p, int32_t *m2p, int32_t *m1c, int32_t *m2c,
 		findMatch(m1c, i1c, m1p, step_size, k1p, u_bin_num, v_bin_num, stat_bin, i1p2, 3, true, use_prior);
 		// based on current left features, find best match in previous left  // --> i1p2 (i1p is used in outer for loop)
 
+		if (i2p < 0 || i2c < 0 || i1c < 0 || i1p2 < 0 )
+			continue;
+
+
 		// circle closure success?
-		if (i1p2 == i1p)    // if last feature coincides with first feature
+		if (i1p2 == i1p)    // i1p2 == i1p if last feature coincides with first feature
 		{
 
 			// extract coordinates of matched feature
@@ -798,13 +810,13 @@ void Matcher::matching(int32_t *m1p, int32_t *m2p, int32_t *m1c, int32_t *m2c,
 			u1c = *(m1c + step_size*i1c + 0); v1c = *(m1c + step_size*i1c + 1);		// current left image
 
 			// if disparities are positive
-			if (u1p >= u2p && u1c >= u2c)    // 
-			{
+			// if (u1p >= u2p && u1c >= u2c)    // 
+			// {
 
 				// add all four images' matched feaures position and index 
 				p_matched.push_back(Matcher::p_match(u1p, v1p, i1p, u2p, v2p, i2p,
 					u1c, v1c, i1c, u2c, v2c, i2c));
-			}
+			// }
 		}
 	}
 
@@ -1147,13 +1159,31 @@ float Matcher::mean(const uint8_t* I, const int32_t &bpl, const int32_t &u_min, 
 // FAST C++ version
 void Matcher::FastFeatures(uint8_t* I, const int32_t* dims, vector<Matcher::maximum> &maxima, int32_t t, int32_t numFastFeature)
 {
-	Fast* f = new Fast();
-	f->detect_nonmax(I, dims[0], dims[1], dims[0], t, numFastFeature);
+	cv::Mat src(cv::Size(dims[0], dims[1]),CV_8UC1,(void *)I, cv::Mat::AUTO_STEP);
+	std::vector<cv::KeyPoint> keypoint_vec;
+	cv::FAST(src,keypoint_vec,t,true,cv::FastFeatureDetector::TYPE_7_12);
 
-	for (int32_t i = 0; i < f->numCornersNonmax; i++)
+	sort(keypoint_vec.begin(),keypoint_vec.end(),[](const cv::KeyPoint& i, const cv::KeyPoint& j){ return i.response > j.response;});
+
+	int num = 0;
+	for (auto keypoint : keypoint_vec)
 	{
-		if (f->c[i].xCoords > 4 && f->c[i].xCoords < dims[0] - 4 && f->c[i].yCoords > 4 && f->c[i].yCoords < dims[1] - 4)
-			maxima.push_back(Matcher::maximum((int32_t)(f->c[i].xCoords), (int32_t)(f->c[i].yCoords), (int32_t)(f->c[i].score), 0));
+		auto x = keypoint.pt.x;
+		auto y = keypoint.pt.y;
+		if ( x > 4 && x < dims[0] - 4 && y > 4  && y < dims[1] - 4 )
+			maxima.push_back(Matcher::maximum(x, y, keypoint.response, 0));
+		num++;
+		if (num == numFastFeature) break;
 	}
-	delete f;
+	
+
+	// Fast* f = new Fast();
+	// f->detect_nonmax(I, dims[0], dims[1], dims[0], t, numFastFeature);
+
+	// for (int32_t i = 0; i < f->numCornersNonmax; i++)
+	// {
+	// 	if (f->c[i].xCoords > 4 && f->c[i].xCoords < dims[0] - 4 && f->c[i].yCoords > 4 && f->c[i].yCoords < dims[1] - 4)
+	// 		maxima.push_back(Matcher::maximum((int32_t)(f->c[i].xCoords), (int32_t)(f->c[i].yCoords), (int32_t)(f->c[i].score), 0));
+	// }
+	// delete f;
 }

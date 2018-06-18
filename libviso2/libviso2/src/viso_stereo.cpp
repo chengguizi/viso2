@@ -1,4 +1,7 @@
 #include "viso_stereo.h"
+#include <iostream>
+
+#include <chrono>
 
 using namespace std;
 
@@ -13,12 +16,36 @@ VisualOdometryStereo::~VisualOdometryStereo()
 
 bool VisualOdometryStereo::process(uint8_t *I1, uint8_t *I2, int32_t* dims, bool replace)
 {
+	auto t1 = std::chrono::system_clock::now();
 	matcher->pushBack(I1, I2, dims, replace);
+
+	int left_pre, right_pre, left_curr, right_curr;
+	matcher->getFeatureNumber(left_pre, right_pre, left_curr, right_curr);
+	cout << "previous feature: " << left_pre << ", " << right_pre << "; current feature: "<< left_curr << ", " << right_curr << endl;
+
+	auto t2 = std::chrono::system_clock::now();
 	matcher->matchFeatures();
+	auto t3 = std::chrono::system_clock::now();
+
+	//cout << "size before = " << matcher->getMatches().size();
 	if (param.bucket.bucket_ornot)
 		matcher->bucketFeatures(param.bucket.max_features, param.bucket.bucket_width, param.bucket.bucket_height);
 	
 	p_matched = matcher->getMatches();
+	//	cout << "size after = " << p_matched.size() ;
+
+	cout << "p_matched.size()="<< p_matched.size()  << endl;
+	auto t4 = std::chrono::system_clock::now();
+	if (p_matched.size() < 6 )
+	{
+		inliers.clear();
+		return false;
+	}
+	// std::chrono::duration<double> diff1 = t2 - t1;
+	// std::chrono::duration<double> diff2 = t3 - t2;
+	// std::chrono::duration<double> diff3 = t4 - t3;
+	//cout << "diff1=" << diff1.count() << ", diff2=" << diff2.count() << ", diff3=" << diff3.count() << endl;
+
 	return updateMotion();
 }
 
@@ -29,17 +56,22 @@ vector<double> VisualOdometryStereo::estimateMotion(vector<Matcher::p_match> p_m
 	bool success = true;
 
 	// compute minimum distance for RANSAC samples
-	double width = 0, height = 0;
+	double width_max = 0, height_max = 0;
+	double width_min = 1e5, height_min = 1e5;
 
 	for (vector<Matcher::p_match>::iterator it = p_matched.begin(); it != p_matched.end(); it++)
 	{
-		if (it->u1c > width)  width = it->u1c;
-		if (it->v1c > height) height = it->v1c;
+		if (it->u1c > width_max)  width_max = it->u1c;
+		if (it->u1c < width_min)  width_min = it->u1c;
+
+		if (it->v1c > height_max) height_max = it->v1c;
+		if (it->v1c < height_min) height_min = it->v1c;
+
 	}
 
 	// random pick 3 matches that a min-dist between them
 
-	double min_dist = min(width, height) / 5.0;	// default divided by 3.0
+	double min_dist = min(width_max-width_min, height_max-height_min) / 5.0;	// default divided by 3.0
 
 	// get number of matches
 	int32_t N = p_matched.size();
@@ -65,7 +97,7 @@ vector<double> VisualOdometryStereo::estimateMotion(vector<Matcher::p_match> p_m
 	{
 		_cu = param.calib.cu;
 		_cv = param.calib.cv;
-		_f = param.calib.f;
+		_f = param.calib.f; // in pixels
 	}
 
 	// project matches of previous image into 3d
@@ -130,8 +162,16 @@ vector<double> VisualOdometryStereo::estimateMotion(vector<Matcher::p_match> p_m
 		while (result == UPDATED)
 		{
 			result = updateParameters(p_matched, active, tr_delta_curr, 1, 1e-6);
-			if (iter++ > 20 || result == CONVERGED)
+			if (result == CONVERGED)
 				break;
+
+			if (iter++ > 20)
+			{
+				// hm: this happens very frequently
+				//cerr << "ERROR estimateMotion(): updateParameters EXCEED 20 iterations" << endl;
+				break;
+			}
+				
 		}
 
 		// overwrite best parameters if we have more inliers
@@ -144,6 +184,8 @@ vector<double> VisualOdometryStereo::estimateMotion(vector<Matcher::p_match> p_m
 				tr_delta = tr_delta_curr;
 			}
 		}
+		//  else
+		//  	cerr << "ERROR estimateMotion(): updateParameters result FAILED" << endl;
 
 		// probility of observing an inlier
 		/*
@@ -162,23 +204,39 @@ vector<double> VisualOdometryStereo::estimateMotion(vector<Matcher::p_match> p_m
 	// final optimization (refinement)
 	if (inliers.size() >= 6)
 	{
+		if (tr_delta.size() != 6 )
+			cerr << "ERROR estimateMotion(): inlier VALID but tr_delta INVALID" << endl;
 		int32_t iter = 0;
 		VisualOdometryStereo::result result = UPDATED;
 		while (result == UPDATED)
 		{
 			result = updateParameters(p_matched, inliers, tr_delta, 1, 1e-8);
-			if (iter++ > 100 || result == CONVERGED)
+			if (result == CONVERGED)
 				break;
+			if (iter++ > 100)
+			{
+				cerr << "ERROR estimateMotion(): optimisation step -> updateParameters EXCEED 100 iterations" << endl;
+				break;
+			}
 		}
 
 		// not converged
 		if (result != CONVERGED)
+		{
+			cerr << "ERROR estimateMotion(): optimisation step -> updateParameters NOT converged = " << result << endl;
 			success = false;
+		}
+			
+		if (result == FAILED)
+			cerr << "ERROR estimateMotion(): optimisation step -> updateParameters FAILED" << endl;
+		if (result == UPDATED)
+			cerr << "ERROR estimateMotion(): optimisation step -> updateParameters UPDATED" << endl;
 
 		// not enough inliers
 	}
 	else
 	{
+		cerr << "ERROR estimateMotion(): inliers.size()<6" << endl;
 		success = false;
 	}
 
@@ -190,6 +248,12 @@ vector<double> VisualOdometryStereo::estimateMotion(vector<Matcher::p_match> p_m
 	delete[] p_predict;
 	delete[] p_observe;
 	delete[] p_residual;
+
+	if (tr_delta.size() !=6)
+	{
+		cerr << "ERROR estimateMotion(): tr_delta.size() !=6" << endl;
+	}
+
 
 	// parameter estimate succeeded?
 	if (success) return tr_delta;

@@ -4,6 +4,10 @@ cmake_minimum_required(VERSION 3.5)
 ### NO.2 Project Name
 project(viso2_ros)
 
+# enable C++11 standard (current directory scope)
+set(CMAKE_CXX_STANDARD 11)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
 ### NO.3 Fine other CMake / Catkin Packages needed for build
 find_package(catkin REQUIRED COMPONENTS 
   libviso2 

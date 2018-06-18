@@ -1,6 +1,7 @@
 #include "viso.h"
 
 #include <math.h>
+#include <iostream>
 
 using namespace std;
 
@@ -27,12 +28,18 @@ bool VisualOdometry::updateMotion()
 
 	// on failure
 	if (tr_delta.size() != 6)
+	{
+		//cerr << "ERROR updateMotion(): tr_delta.size()=" << tr_delta.size()<< endl;
 		return false;
+	}
 
 	// catch wrong RT computation
 	// for replace mode, a higher limit is expected
 	if (fabs(tr_delta[3])>=10 || fabs(tr_delta[4])>=10 || fabs(tr_delta[5])>=10)
+	{
+		cerr << "ERROR updateMotion(): abs(tr_delta)>=10" << endl;
 		return false;
+	}
 
 	// set transformation matrix (previous to current frame)
 	Tr_delta = transformationVectorToMatrix(tr_delta);

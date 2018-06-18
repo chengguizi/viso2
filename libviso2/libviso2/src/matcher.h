@@ -47,12 +47,12 @@ public:
 			outlier_flow_tolerance = 5;
 			multi_stage = 0;
 			half_resolution = 0;
-			remove_outliers = 1;
+			remove_outliers = 0;
 			fast_threshold_dense = 10;
 			fast_threshold_sparse = 40;
-			numFastFeature_sparse = 1000;
-			numFastFeature_dense = 2000;
-			refinement = 2;
+			numFastFeature_sparse = 200;
+			numFastFeature_dense = 400;
+			refinement = 0;
 		}
 	};
 
@@ -130,6 +130,14 @@ public:
 	// the previous frame. this function is useful if you want to reconstruct 3d
 	// and you want to cancel the change of (unknown) camera gain.
 	float getGain(std::vector<int32_t> inliers);
+
+	void getFeatureNumber(int& left_pre, int& right_pre, int& left_curr, int& right_curr)
+	{
+		left_pre = n1p2;
+		right_pre = n2p2;
+		left_curr = n1c2;
+		right_curr = n2c2;
+	}
 
 	// make it public
 	parameters param;
@@ -230,7 +238,7 @@ private:
 
 	// parameters
 	int32_t    margin;
-
+	// last number is passes, so only *2 are used for dense matching
 	int32_t *m1p1, *m2p1, *m1c1, *m2c1;     // *m1p1 points to (1st pass) sparse maxima features for previous left image
 	int32_t *m1p2, *m2p2, *m1c2, *m2c2;	   // *m2c2 points to (2nd pass) dense maxima features for current right image
 	int32_t n1p1, n2p1, n1c1, n2c1;		   // n1p1 is the number of sparse maxima features for previous letf image

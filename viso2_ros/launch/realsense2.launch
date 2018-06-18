@@ -1,0 +1,21 @@
+<launch>
+
+  <node pkg="tf" type="static_transform_publisher" name="bla" args="0.0 0.0 0.0 0.0 0.0 0.0  /base_link /camera  50"> 
+  </node>
+
+	<node pkg="viso2_ros" type="stereo_odometer" name="stereo_odometer" output="screen">
+        <param name="left_image" type="str" value="/rs2_ros/left/image_rect_raw" />
+        <param name="right_image" type="str" value="/rs2_ros/right/image_rect_raw" />
+
+        <param name="left_camerainfo" type="str" value="/rs2_ros/left/camera_info" />
+        <param name="right_camerainfo" type="str" value="/rs2_ros/right/camera_info" />
+
+        <param name="ref_frame_change_method" value="0" />
+        <param name="approximate_sync" type="bool" value="false" />
+        <param name="queue_size" type="int" value="1" />
+        <param name="refinement" type="int" value="0" />
+	</node>
+
+
+
+</launch>

@@ -30,8 +30,8 @@ public:
     bucketing () {
 	    bucket_ornot = 0;
       max_features  = 2;
-      bucket_width  = 50;
-      bucket_height = 50;
+      bucket_width  = 25;
+      bucket_height = 25;
     }
   };
   

@@ -21,6 +21,7 @@ class OdometerBase
 
 private:
 
+	
 	// publisher
 	ros::Publisher odom_pub_;
 	ros::Publisher pose_pub_;
@@ -122,7 +123,7 @@ protected:
 		}
 		else
 		{
-			ROS_WARN_THROTTLE(60.0, "The tf from '%s' to '%s' does not seem to be available, "
+			ROS_WARN_THROTTLE(200.0, "The tf from '%s' to '%s' does not seem to be available, "
 									"will assume it as identity!", 
 									base_link_frame_id_.c_str(),
 									sensor_frame_id_.c_str());

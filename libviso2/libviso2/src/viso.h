@@ -65,7 +65,7 @@ public:
   // note: getMotion() returns the last transformation even when process()
   // has failed. this is useful if you wish to linearly extrapolate occasional
   // frames for which no correspondences have been found
-  Matrix getMotion () { return Tr_delta; }
+  Matrix getMotion () { return transformationVectorToMatrix(tr_delta); }
 
   // returns previous to current feature matches from internal matcher
   std::vector<Matcher::p_match> getMatches () { return matcher->getMatches(); }
@@ -108,7 +108,8 @@ protected:
   // get random and unique sample of num numbers from 1:N
   std::vector<int32_t> getRandomSample(int32_t N, int32_t num);
 
-  Matrix                         Tr_delta;   // transformation (previous -> current frame)  
+  vector<double>                 tr_delta;
+  //Matrix                         Tr_delta;   // transformation (previous -> current frame)  
   bool                           Tr_valid;   // motion estimate exists?
   Matcher                       *matcher;    // feature matcher
   std::vector<int32_t>           inliers;    // inlier set

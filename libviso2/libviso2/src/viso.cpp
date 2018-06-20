@@ -11,7 +11,8 @@ VisualOdometry::VisualOdometry(parameters param) : param(param)
 	p_observe = 0;
 	p_predict = 0;
 	matcher = new Matcher(param.match);
-	Tr_delta = Matrix::eye(4);
+	tr_delta.resize(6);
+	// Tr_delta = Matrix::eye(4);
 	Tr_valid = false;
 	srand(0);
 }
@@ -23,26 +24,33 @@ VisualOdometry::~VisualOdometry()
 
 bool VisualOdometry::updateMotion()
 {
+	if ( p_matched.size() < 4 )
+	{
+		std::cerr << "too few matches < 4" << std::endl;
+		inliers.clear();
+		return false;
+	}
 	// estimate motion
-	vector<double> tr_delta = estimateMotion(p_matched);  // p_matched = p_matched_2 (only dense matched features used)
+	vector<double> _tr_delta = estimateMotion(p_matched);  // p_matched = p_matched_2 (only dense matched features used)
 
 	// on failure
-	if (tr_delta.size() != 6)
+	if (_tr_delta.size() != 6)
 	{
-		//cerr << "ERROR updateMotion(): tr_delta.size()=" << tr_delta.size()<< endl;
+		//cerr << "ERROR updateMotion(): _tr_delta.size()=" << _tr_delta.size()<< endl;
 		return false;
 	}
 
 	// catch wrong RT computation
 	// for replace mode, a higher limit is expected
-	if (fabs(tr_delta[3])>=10 || fabs(tr_delta[4])>=10 || fabs(tr_delta[5])>=10)
+	if (fabs(_tr_delta[3])>=10 || fabs(_tr_delta[4])>=10 || fabs(_tr_delta[5])>=10)
 	{
-		cerr << "ERROR updateMotion(): abs(tr_delta)>=10" << endl;
+		cerr << "ERROR updateMotion(): abs(_tr_delta)>=10" << endl;
 		return false;
 	}
 
+	
 	// set transformation matrix (previous to current frame)
-	Tr_delta = transformationVectorToMatrix(tr_delta);
+	tr_delta = _tr_delta;
 	Tr_valid = true;
 
 	// success

@@ -638,19 +638,25 @@ void Matcher::createIndexVector(int32_t* m, int32_t n, vector<int32_t> *k, const
 	// descriptor step size
 	int32_t step_size = sizeof(Matcher::maximum) / sizeof(int32_t);   //size of the maximum struct
 
+	// vector<int32_t> *k2c = new vector<int32_t>[u_bin_num*v_bin_num];
+
 	// for all points do
 	for (int32_t i = 0; i < n; i++)
 	{
 		// extract coordinates and class from maxima struct
 		int32_t u = *(m + step_size*i + 0); // u-coordinate
 		int32_t v = *(m + step_size*i + 1); // v-coordinate
+		int32_t c = *(m + step_size*i + 3); // HM: used as the marker for previous matched quad points
 
 		// compute row and column of bin to which this observation belongs
 		int32_t u_bin = min((int32_t)floor((float)u / (float)param.match_binsize), u_bin_num - 1);
 		int32_t v_bin = min((int32_t)floor((float)v / (float)param.match_binsize), v_bin_num - 1);
 
 		// save index
-		k[v_bin*u_bin_num + u_bin].push_back(i);
+		if (c) // it is a good point
+			k[v_bin*u_bin_num + u_bin].insert(k[v_bin*u_bin_num + u_bin].begin(),i);  // good points have priority in matching
+		else
+			k[v_bin*u_bin_num + u_bin].push_back(i);
 	}
 }
 
@@ -714,6 +720,8 @@ inline void Matcher::findMatch(int32_t* m1, const int32_t &i1, int32_t* m2, cons
 			{
 				int32_t u2 = *(m2 + step_size*(*i2_it) + 0);													// track the index and extract u,v of features in the other image
 				int32_t v2 = *(m2 + step_size*(*i2_it) + 1);
+				int32_t c2 = *(m2 + step_size*(*i2_it) + 3); // HM: give priority to matched points
+
 				if (u2 >= u_min && u2 <= u_max && v2 >= v_min && v2 <= v_max)
 				{
 					__m128i xmm3 = _mm_load_si128((__m128i*)(m2 + step_size*(*i2_it) + 4));
@@ -730,6 +738,10 @@ inline void Matcher::findMatch(int32_t* m1, const int32_t &i1, int32_t* m2, cons
 						double dist = sqrt(du*du + dv*dv);
 						cost += 4 * dist;
 					}
+
+					//HM: give priority to matched points
+					if (c2)
+						cost = cost * 0.95;
 
 					if (cost < min_cost)
 					{
@@ -760,6 +772,8 @@ void Matcher::matching(int32_t *m1p, int32_t *m2p, int32_t *m1c, int32_t *m2c,
 	vector<int32_t> *k1c = new vector<int32_t>[bin_num];
 	vector<int32_t> *k2c = new vector<int32_t>[bin_num];
 
+	vector<int32_t> matched_bin(bin_num);
+
 	// loop variables
 	int32_t* M = (int32_t*)calloc(dims_c[0] * dims_c[1], sizeof(int32_t));                  // prepare for p_match
 	int32_t i1p=0, i2p=0, i1c=0, i2c=0, i1p2=0;
@@ -771,6 +785,10 @@ void Matcher::matching(int32_t *m1p, int32_t *m2p, int32_t *m1c, int32_t *m2c,
 	createIndexVector(m1c, n1c, k1c, u_bin_num, v_bin_num);  // for current left features
 	createIndexVector(m2c, n2c, k2c, u_bin_num, v_bin_num);  // for current right feayures
 
+
+	_rematched = 0;
+
+
 	// for all points do
 	for (i1p = 0; i1p < n1p; i1p++)     // i1p: feature index
 	{
@@ -778,11 +796,19 @@ void Matcher::matching(int32_t *m1p, int32_t *m2p, int32_t *m1c, int32_t *m2c,
 		// coordinates
 		u1p = *(m1p + step_size*i1p + 0);
 		v1p = *(m1p + step_size*i1p + 1);
+		int32_t c1p = *(m1p + step_size*i1p + 3); // test if this point is matched before
 
 		// compute row and column of statistics bin to which this observation belongs
 		int32_t u_bin = min((int32_t)floor((float)u1p / (float)param.match_binsize), u_bin_num - 1);
 		int32_t v_bin = min((int32_t)floor((float)v1p / (float)param.match_binsize), v_bin_num - 1);
 		int32_t stat_bin = v_bin*u_bin_num + u_bin;
+
+		if (matched_bin[stat_bin] >= 5 && !c1p)
+		{
+			//std::cout << i1p << " exceeded bin quota 2" << std::endl;
+			continue;
+		}
+			
 
 		// match in circle
 		findMatch(m1p, i1p, m2p, step_size, k2p, u_bin_num, v_bin_num, stat_bin, i2p, 0, false, use_prior);       // use_prior == false; based on previous left features, find best match in previous right// -->i2p
@@ -801,26 +827,45 @@ void Matcher::matching(int32_t *m1p, int32_t *m2p, int32_t *m1c, int32_t *m2c,
 			continue;
 
 
-		// circle closure success?
-		if (i1p2 == i1p)    // i1p2 == i1p if last feature coincides with first feature
+		if (i1p2 != i1p)
 		{
 
-			// extract coordinates of matched feature
-			u2c = *(m2c + step_size*i2c + 0); v2c = *(m2c + step_size*i2c + 1);     // current right image
-			u1c = *(m1c + step_size*i1c + 0); v1c = *(m1c + step_size*i1c + 1);		// current left image
+			int32_t u1p2 = *(m1p + step_size*i1p2 + 0);
+			int32_t v1p2 = *(m1p + step_size*i1p2 + 1);
 
-			// if disparities are positive
-			// if (u1p >= u2p && u1c >= u2c)    // 
-			// {
-
-				// add all four images' matched feaures position and index 
-				p_matched.push_back(Matcher::p_match(u1p, v1p, i1p, u2p, v2p, i2p,
-					u1c, v1c, i1c, u2c, v2c, i2c));
-			// }
+			if ( fabs( u1p2 - u1p) >  2 || fabs( v1p2 - v1p) > 2) // the two points does not match
+				continue;
+			// else
+			// 	cout <<  "non-exact match" << i1p2 << endl;
+		}else // exact matching!
+		{
+			// Marking the closed loop features as good features
+			int32_t* c2c = (m2c + step_size*i2c + 3);   // current right image
+			int32_t* c1c = (m1c + step_size*i1c + 3);	// current left image
+			*c2c = i1p;
+			*c1c = i1p;
+			_rematched++;
 		}
+		// circle closure success?
+		// i1p2 == i1p if last feature coincides with first feature
+
+
+		// extract coordinates of matched feature
+		u2c = *(m2c + step_size*i2c + 0); v2c = *(m2c + step_size*i2c + 1);     // current right image
+		u1c = *(m1c + step_size*i1c + 0); v1c = *(m1c + step_size*i1c + 1);		// current left image
+
+		// if disparities are positive
+		if (u1p >= u2p && u1c >= u2c)    // 
+		{
+			// add all four images' matched feaures position and index 
+			p_matched.push_back(Matcher::p_match(u1p, v1p, i1p, u2p, v2p, i2p,
+				u1c, v1c, i1c, u2c, v2c, i2c));
+
+			matched_bin[stat_bin]++;
+		}
+
 	}
-
-
+	
 	// free memory
 	free(M);
 	delete[]k1p;
@@ -1159,31 +1204,55 @@ float Matcher::mean(const uint8_t* I, const int32_t &bpl, const int32_t &u_min, 
 // FAST C++ version
 void Matcher::FastFeatures(uint8_t* I, const int32_t* dims, vector<Matcher::maximum> &maxima, int32_t t, int32_t numFastFeature)
 {
-	cv::Mat src(cv::Size(dims[0], dims[1]),CV_8UC1,(void *)I, cv::Mat::AUTO_STEP);
-	std::vector<cv::KeyPoint> keypoint_vec;
-	cv::FAST(src,keypoint_vec,t,true,cv::FastFeatureDetector::TYPE_7_12);
+	// cv::Mat src(cv::Size(dims[0], dims[1]),CV_8UC1,(void *)I, cv::Mat::AUTO_STEP);
+	// std::vector<cv::KeyPoint> keypoint_vec;
+	// cv::FAST(src,keypoint_vec,t,true,cv::FastFeatureDetector::TYPE_7_12);
 
-	sort(keypoint_vec.begin(),keypoint_vec.end(),[](const cv::KeyPoint& i, const cv::KeyPoint& j){ return i.response > j.response;});
+	// sort(keypoint_vec.begin(),keypoint_vec.end(),[](const cv::KeyPoint& i, const cv::KeyPoint& j){ return i.response > j.response;});
 
-	int num = 0;
-	for (auto keypoint : keypoint_vec)
+	// int num = 0;
+	// for (auto keypoint : keypoint_vec)
+	// {
+	// 	auto x = keypoint.pt.x;
+	// 	auto y = keypoint.pt.y;
+	// 	if ( x > 4 && x < dims[0] - 4 && y > 4  && y < dims[1] - 4 )
+	// 		maxima.push_back(Matcher::maximum(x, y, keypoint.response, 0));
+	// 	num++;
+	// 	if (num == numFastFeature) break;
+	// }
+
+	// static int count;
+
+	// std::vector<cv::KeyPoint> keypoint_vec;
+	// cv::namedWindow("fast feature", cv::WINDOW_AUTOSIZE);
+
+	Fast* f = new Fast();
+	f->detect_nonmax(I, dims[0], dims[1], dims[2], t, numFastFeature);
+
+	for (int32_t i = 0; i < f->numCornersNonmax; i++)
 	{
-		auto x = keypoint.pt.x;
-		auto y = keypoint.pt.y;
-		if ( x > 4 && x < dims[0] - 4 && y > 4  && y < dims[1] - 4 )
-			maxima.push_back(Matcher::maximum(x, y, keypoint.response, 0));
-		num++;
-		if (num == numFastFeature) break;
+		if (f->c[i].xCoords > 4 && f->c[i].xCoords < dims[0] - 4 && f->c[i].yCoords > 4 && f->c[i].yCoords < dims[1] - 4)
+		{
+			maxima.push_back(Matcher::maximum((int32_t)(f->c[i].xCoords), (int32_t)(f->c[i].yCoords), (int32_t)(f->c[i].score), 0));
+			// cv::KeyPoint key;
+			// key.pt.x = f->c[i].xCoords;
+			// key.pt.y = f->c[i].yCoords;
+			// key.response = f->c[i].score;
+			// keypoint_vec.push_back(key);
+		}
+			
 	}
+	delete f;
+
+	// cv::Mat image(cv::Size(dims[0],dims[1]),CV_8UC1,(void *)I, dims_c[2]);
+	// cv::Mat outImg(cv::Size(dims[0],dims[1]),CV_8UC1);
+	// drawKeypoints(image,keypoint_vec,outImg);
+
+	// if (!(count++ % 2))
+	// {
+	// 	cv::imshow("fast feature",outImg);
+	// 	cvWaitKey(1);
+	// }
 	
 
-	// Fast* f = new Fast();
-	// f->detect_nonmax(I, dims[0], dims[1], dims[0], t, numFastFeature);
-
-	// for (int32_t i = 0; i < f->numCornersNonmax; i++)
-	// {
-	// 	if (f->c[i].xCoords > 4 && f->c[i].xCoords < dims[0] - 4 && f->c[i].yCoords > 4 && f->c[i].yCoords < dims[1] - 4)
-	// 		maxima.push_back(Matcher::maximum((int32_t)(f->c[i].xCoords), (int32_t)(f->c[i].yCoords), (int32_t)(f->c[i].score), 0));
-	// }
-	// delete f;
 }

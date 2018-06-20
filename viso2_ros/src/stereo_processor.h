@@ -11,6 +11,10 @@
 #include <message_filters/sync_policies/approximate_time.h>
 #include <image_transport/subscriber_filter.h>
 
+//#include <vector>
+#include <thread>
+#include <atomic>
+
 namespace viso2_ros
 {
 
@@ -36,6 +40,9 @@ private:
 	boost::shared_ptr<ApproximateSync> approximate_sync_;
 	int queue_size_;
 
+	std::thread _thread;
+	
+
 	// for sync checking
 	ros::WallTimer check_synced_timer_;
 	int left_received_, right_received_, left_info_received_, right_info_received_, all_received_;
@@ -53,10 +60,29 @@ private:
 							const sensor_msgs::CameraInfoConstPtr& r_info_msg)
 	{
 		// For sync error checking
-		++all_received_; 
+		
+		int _seq = l_image_msg->header.seq;
+		all_received_ = _seq;
 
-		// cout << endl << "dataCb=" << all_received_ << "begins." << endl;
+		//std::cout << "dataCb frame: " << _seq << std::endl;
 
+
+		// if ( _threadDone == true )
+		// {
+		// 	//if (_thread.joinable())	_thread.detach();
+
+		// }else
+		// {
+		// 	std::cout << "abort frame: " << _seq << std::endl;
+		// 	return;
+		// }
+			
+
+		// std::cout << "start thread "  " with frame " << _seq << std::endl;
+
+		// _threadDone = false;
+		// _thread = std::thread(&StereoProcessor::imageCallback, this, l_image_msg, r_image_msg, l_info_msg, r_info_msg);
+		// _thread.detach();
 		// call implementation
 		imageCallback(l_image_msg, r_image_msg, l_info_msg, r_info_msg);
 		// cout << endl << "dataCb=" << all_received_ << "ends." << endl;
@@ -90,14 +116,14 @@ private:
 
 
 protected:
-
+	
 	/**
 	 * Constructor, subscribes to input topics using image transport and registers
 	 * callbacks.
 	 * \param transport The image transport to use
 	 */
 	StereoProcessor(const std::string& transport) :
-		left_received_(0), right_received_(0), left_info_received_(0), right_info_received_(0), all_received_(0)
+		left_received_(0), right_received_(0), left_info_received_(0), right_info_received_(0), all_received_(0), _threadDone(true)
 	{
 		// Read local parameters
 		ros::NodeHandle local_nh("~");
@@ -138,14 +164,12 @@ protected:
 		local_nh.param("approximate_sync", approx, false);
 		if (approx)
 		{
-			approximate_sync_.reset(new ApproximateSync(ApproximatePolicy(queue_size_),
-																									left_sub_, right_sub_, left_info_sub_, right_info_sub_) );
+			approximate_sync_.reset(new ApproximateSync(ApproximatePolicy(queue_size_), left_sub_, right_sub_, left_info_sub_, right_info_sub_) );
 			approximate_sync_->registerCallback(boost::bind(&StereoProcessor::dataCb, this, _1, _2, _3, _4));
 		}
 		else
 		{
-			exact_sync_.reset(new ExactSync(ExactPolicy(queue_size_),
-																			left_sub_, right_sub_, left_info_sub_, right_info_sub_) );
+			exact_sync_.reset(new ExactSync(ExactPolicy(queue_size_), left_sub_, right_sub_, left_info_sub_, right_info_sub_) );
 			exact_sync_->registerCallback(boost::bind(&StereoProcessor::dataCb, this, _1, _2, _3, _4));
 		}
 	}
@@ -153,11 +177,12 @@ protected:
 	/**
 	 * Implement this method in sub-classes 
 	 */
-	virtual void imageCallback(const sensor_msgs::ImageConstPtr& l_image_msg,
-														 const sensor_msgs::ImageConstPtr& r_image_msg,
-														 const sensor_msgs::CameraInfoConstPtr& l_info_msg,
-														 const sensor_msgs::CameraInfoConstPtr& r_info_msg) = 0;
+	virtual void imageCallback(const sensor_msgs::ImageConstPtr l_image_msg,
+		const sensor_msgs::ImageConstPtr r_image_msg,
+		const sensor_msgs::CameraInfoConstPtr l_info_msg,
+		const sensor_msgs::CameraInfoConstPtr r_info_msg) = 0;
 
+	std::atomic<bool> _threadDone;
 };
 
 } // end of namespace

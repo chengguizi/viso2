@@ -21,32 +21,32 @@ bool VisualOdometryStereo::process(uint8_t *I1, uint8_t *I2, int32_t* dims, bool
 
 	int left_pre, right_pre, left_curr, right_curr;
 	matcher->getFeatureNumber(left_pre, right_pre, left_curr, right_curr);
-	cout << "previous feature: " << left_pre << ", " << right_pre << "; current feature: "<< left_curr << ", " << right_curr << endl;
+	if (left_pre < 100 || right_pre < 100 || left_curr < 100 || right_curr < 100)
+		cout << "previous feature: " << left_pre << ", " << right_pre << "; current feature: "<< left_curr << ", " << right_curr << endl;
 
 	auto t2 = std::chrono::system_clock::now();
 	matcher->matchFeatures();
 	auto t3 = std::chrono::system_clock::now();
 
-	//cout << "size before = " << matcher->getMatches().size();
-	if (param.bucket.bucket_ornot)
-		matcher->bucketFeatures(param.bucket.max_features, param.bucket.bucket_width, param.bucket.bucket_height);
-	
+	//cout << "matches size before = " << matcher->getMatches().size() << endl;
+	// if (param.bucket.bucket_ornot)
+	// 	matcher->bucketFeatures(param.bucket.max_features, param.bucket.bucket_width, param.bucket.bucket_height);
 	p_matched = matcher->getMatches();
-	//	cout << "size after = " << p_matched.size() ;
 
-	cout << "p_matched.size()="<< p_matched.size()  << endl;
+	bool rel = updateMotion();
 	auto t4 = std::chrono::system_clock::now();
-	if (p_matched.size() < 6 )
-	{
-		inliers.clear();
-		return false;
-	}
-	// std::chrono::duration<double> diff1 = t2 - t1;
-	// std::chrono::duration<double> diff2 = t3 - t2;
-	// std::chrono::duration<double> diff3 = t4 - t3;
-	//cout << "diff1=" << diff1.count() << ", diff2=" << diff2.count() << ", diff3=" << diff3.count() << endl;
+	std::chrono::duration<double> runtime = t4 - t1;
 
-	return updateMotion();
+	auto num_matches = getNumberOfMatches();
+	auto num_inliers = getNumberOfInliers();
+
+	printf("process time: %.2lf, matches: %4d (%4d rematched), inliers: %.1lf\%\n",runtime.count(),num_matches,matcher->getNumRematches(),100.0*num_inliers/num_matches);
+	//cout << "process time: " << runtime.count();
+	//cout << ", Matches: " << num_matches << "(" << matcher->getNumRematches() <<" rematches), Inliers: " << 100.0*num_inliers/num_matches << " %" << endl;
+
+	// cout << "matches size after = " << matcher->getMatches().size() << endl;
+
+	return rel;
 }
 
 vector<double> VisualOdometryStereo::estimateMotion(vector<Matcher::p_match> p_matched)
@@ -128,10 +128,6 @@ vector<double> VisualOdometryStereo::estimateMotion(vector<Matcher::p_match> p_m
 	{
 
 		vector<int32_t> active;
-
-		// draw random sample set
-		// active = getRandomSample(N, 3);
-
 		
 		int32_t selection_iter = 0;
 		while (true)

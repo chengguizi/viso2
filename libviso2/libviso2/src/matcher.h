@@ -126,6 +126,11 @@ public:
 		return p_matched_2;			// yx: default is p_matched_2
 	}
 
+	int getNumRematches()
+	{
+		return _rematched;
+	}
+
 	// given a vector of inliers computes gain factor between the current and
 	// the previous frame. this function is useful if you want to reconstruct 3d
 	// and you want to cancel the change of (unknown) camera gain.
@@ -238,6 +243,8 @@ private:
 
 	// parameters
 	int32_t    margin;
+
+	// hm: below are the results from the fast features
 	// last number is passes, so only *2 are used for dense matching
 	int32_t *m1p1, *m2p1, *m1c1, *m2c1;     // *m1p1 points to (1st pass) sparse maxima features for previous left image
 	int32_t *m1p2, *m2p2, *m1c2, *m2c2;	   // *m2c2 points to (2nd pass) dense maxima features for current right image
@@ -255,6 +262,8 @@ private:
 	std::vector<Matcher::p_match> p_matched_1;
 	std::vector<Matcher::p_match> p_matched_2;
 	std::vector<Matcher::range>   ranges;
+
+	int _rematched;
 };
 
 #endif

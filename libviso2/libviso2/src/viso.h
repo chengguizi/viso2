@@ -21,24 +21,10 @@ public:
     }
   };
   
-  // bucketing parameters
-  struct bucketing {  
-	  int32_t bucket_ornot;
-    int32_t max_features;  // maximal number of features per bucket 
-    double  bucket_width;  // width of bucket
-    double  bucket_height; // height of bucket
-    bucketing () {
-	    bucket_ornot = 0;
-      max_features  = 2;
-      bucket_width  = 25;
-      bucket_height = 25;
-    }
-  };
-  
   // general parameters
   struct parameters {
     Matcher::parameters         match;            // matching parameters
-    VisualOdometry::bucketing   bucket;           // bucketing parameters
+    //VisualOdometry::bucketing   bucket;           // bucketing parameters
     VisualOdometry::calibration calib;            // camera calibration parameters
   };
 

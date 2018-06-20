@@ -40,7 +40,7 @@ bool VisualOdometryStereo::process(uint8_t *I1, uint8_t *I2, int32_t* dims, bool
 	auto num_matches = getNumberOfMatches();
 	auto num_inliers = getNumberOfInliers();
 
-	printf("process time: %.2lf, matches: %4d (%4d rematched), inliers: %.1lf\%\n",runtime.count(),num_matches,matcher->getNumRematches(),100.0*num_inliers/num_matches);
+	printf("process time: %.2lf, matches: %4d (%4d rematched), inliers: %.1lf%%\n",runtime.count(),num_matches,matcher->getNumRematches(),100.0*num_inliers/num_matches);
 	//cout << "process time: " << runtime.count();
 	//cout << ", Matches: " << num_matches << "(" << matcher->getNumRematches() <<" rematches), Inliers: " << 100.0*num_inliers/num_matches << " %" << endl;
 

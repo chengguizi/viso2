@@ -133,8 +133,6 @@ protected:
 		visual_odometer_params_.calib.f = model.left().fx()*scaling_; // in pixels
 		visual_odometer_params_.calib.cu = model.left().cx()*scaling_;
 		visual_odometer_params_.calib.cv = model.left().cy()*scaling_;
-
-		visual_odometer_params_.bucket.bucket_ornot = false;
 		
 		visual_odometer_.reset(new VisualOdometryStereo(visual_odometer_params_));
 		//if (l_info_msg->header.frame_id != "") setSensorFrameId(l_info_msg->header.frame_id);

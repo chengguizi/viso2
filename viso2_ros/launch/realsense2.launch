@@ -10,21 +10,23 @@
         <param name="left_camerainfo" type="str" value="/rs2_ros/left/camera_info" />
         <param name="right_camerainfo" type="str" value="/rs2_ros/right/camera_info" />
 
-        <param name="ref_frame_change_method" value="1" />
-        <param name="ref_frame_motion_threshold" value="8.0" />
-        <param name="ref_frame_inlier_threshold" value="20" />
-        
+        <param name="max_features" type="int" value="5" />   
+        <param name="bucket_ornot" type="bool" value="true" />   
+
+        <param name="ref_frame_change_method" type="int" value="1" />
+        <param name="ref_frame_motion_threshold" type="double" value="8.0" />
+        <param name="ref_frame_inlier_threshold" type="int" value="20" />
 
         <param name="approximate_sync" type="bool" value="false" />
         <param name="queue_size" type="int" value="3" />
         <param name="refinement" type="int" value="1" />
-        <param name="remove_outliers" value="false" />
+        <param name="remove_outliers" type="bool" value="false" />
         <param name="numFastFeature_dense" type="int" value="1000" />
         <param name="fast_threshold_dense" type="int" value="15" />    
 
-        <param name="image_pre_scaling" value="0.5" />
-        <param name="image_pre_contrast" value="1.6" />   
-        <param name="image_pre_brightness" value="60.0" />   
+        <param name="image_pre_scaling" type="double" value="0.5" />
+        <param name="image_pre_contrast" type="double" value="1.6" />   
+        <param name="image_pre_brightness" type="double" value="60.0" />   
         
 	</node>
 

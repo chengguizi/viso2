@@ -24,27 +24,15 @@ void loadParams(const ros::NodeHandle& local_nh, Matcher::parameters& params)
 	local_nh.getParam("fast_threshold_sparse",  params.fast_threshold_sparse);
 	local_nh.getParam("numFastFeature_dense",   params.numFastFeature_dense);
 	local_nh.getParam("numFastFeature_sparse",  params.numFastFeature_sparse);
-}
 
-/// loads bucketing params
-void loadParams(const ros::NodeHandle& local_nh, VisualOdometry::bucketing& bucketing)
-{
-	local_nh.getParam("max_features",  bucketing.max_features);
-	local_nh.getParam("bucket_width",  bucketing.bucket_width);
-	local_nh.getParam("bucket_height", bucketing.bucket_height);
-}
-
-/// loads common odometry params
-void loadCommonParams(const ros::NodeHandle& local_nh, VisualOdometry::parameters& params)
-{
-	loadParams(local_nh, params.match);
-	loadParams(local_nh, params.bucket);
+	local_nh.getParam("max_features",  params.bucket.max_features);
+	local_nh.getParam("bucket_ornot",  params.bucket.bucket_ornot);
 }
 
 /// loads common & stereo specific params
 void loadParams(const ros::NodeHandle& local_nh, VisualOdometryStereo::parameters& params)
 {
-	loadCommonParams(local_nh, params);
+	loadParams(local_nh, params.match);
 	local_nh.getParam("ransac_iters",     params.ransac_iters);
 	local_nh.getParam("inlier_threshold", params.inlier_threshold);
 	local_nh.getParam("reweighting",      params.reweighting);
@@ -67,6 +55,9 @@ std::ostream& operator<<(std::ostream& out, const Matcher::parameters& params)
 	out << "  fast_threshold_sparse  = " << params.fast_threshold_sparse << std::endl;
 	out << "  numFastFeature_dense   = " << params.numFastFeature_dense << std::endl;
 	out << "  numFastFeature_sparse  = " << params.numFastFeature_sparse << std::endl;
+
+	out << "  bucket_ornot  = " << params.bucket.bucket_ornot << std::endl;
+	out << "  max_features  = " << params.bucket.max_features << std::endl;
 	return out;
 }
 
@@ -78,20 +69,11 @@ std::ostream& operator<<(std::ostream& out, const VisualOdometry::calibration& c
 	return out;
 }
 
-std::ostream& operator<<(std::ostream& out, const VisualOdometry::bucketing& bucketing)
-{
-	out << "  bucket_ornot  = " << bucketing.bucket_ornot << std::endl;
-	out << "  max_features  = " << bucketing.max_features << std::endl;
-	out << "  bucket_width  = " << bucketing.bucket_width << std::endl;
-	out << "  bucket_height = " << bucketing.bucket_height << std::endl;
-	return out;
-}
-
 std::ostream& operator<<(std::ostream& out, const VisualOdometry::parameters& params)
 {
 	out << "Calibration parameters:" << std::endl << params.calib;
 	out << "Matcher parameters:" << std::endl << params.match;
-	out << "Bucketing parameters:" << std::endl << params.bucket;
+	//out << "Bucketing parameters:" << std::endl << params.bucket;
 	return out;
 }
 

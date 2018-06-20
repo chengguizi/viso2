@@ -215,63 +215,6 @@ void Matcher::matchFeatures()
 	}
 }
 
-void Matcher::bucketFeatures(int32_t max_features, float bucket_width, float bucket_height)
-{
-
-	// find max values
-	float u_max = 0;
-	float u_min = 1e5;
-	float v_max = 0;
-	float v_min = 1e5;
-	for (auto it :  p_matched_2)
-	{
-		if (it.u1c > u_max)
-			u_max = it.u1c;             // maximum u,v feature position in current left image
-		if (it.u1c < u_min)
-			u_min = it.u1c;
-
-		if (it.v1c > v_max)
-			v_max = it.v1c;
-		if (it.v1c < v_min)
-			v_min = it.v1c;
-	}
-
-	// allocate number of buckets needed
-	int32_t bucket_cols = (int32_t)floor( (u_max-u_min) / bucket_width) + 1;        // number of bucket in cols to cover all matched features
-	int32_t bucket_rows = (int32_t)floor( (v_max-v_min) / bucket_height) + 1;	   // number of bucket in rows to cover all matched features
-	vector<p_match> *buckets = new vector<p_match>[bucket_cols*bucket_rows];	// total number of bucket stored in a vector
-
-	// assign matches to their buckets
-	for (auto it : p_matched_2)
-	{
-		int32_t u = (int32_t)floor( (it.u1c - u_min ) / bucket_width);                // extract u,v coordinates of matched features and find their buckets
-		int32_t v = (int32_t)floor( (it.v1c - v_min ) / bucket_height);
-		buckets[v*bucket_cols + u].push_back(it);							// store matched features <p_macth> in corresponding buckets
-	}
-
-	// refill p_matched from buckets
-	p_matched_2.clear();													// clear and prepare for assignments from buckets
-
-	for (int32_t i = 0; i < bucket_cols*bucket_rows; i++)
-	{
-		// shuffle bucket indices randomly
-		//std::random_shuffle(buckets[i].begin(), buckets[i].end());
-
-		// add up to max_features features from this bucket to p_matched
-		int32_t k = 0;
-		for (vector<p_match>::iterator it = buckets[i].begin(); it != buckets[i].end(); it++)
-		{
-			p_matched_2.push_back(*it);
-			k++;
-			if (k >= max_features)                        // by default, max_features = 2 (in viso.h); randomly store 2 matched features in each bucket, pushback to p_matched_2;
-				break;
-		}
-	}
-
-	// free buckets
-	delete[]buckets;
-}
-
 float Matcher::getGain(vector<int32_t> inliers)
 {
 
@@ -803,7 +746,7 @@ void Matcher::matching(int32_t *m1p, int32_t *m2p, int32_t *m1c, int32_t *m2c,
 		int32_t v_bin = min((int32_t)floor((float)v1p / (float)param.match_binsize), v_bin_num - 1);
 		int32_t stat_bin = v_bin*u_bin_num + u_bin;
 
-		if (matched_bin[stat_bin] >= 5 && !c1p)
+		if (matched_bin[stat_bin] >= param.bucket.max_features && param.bucket.bucket_ornot && !c1p)
 		{
 			//std::cout << i1p << " exceeded bin quota 2" << std::endl;
 			continue;
@@ -865,7 +808,7 @@ void Matcher::matching(int32_t *m1p, int32_t *m2p, int32_t *m1c, int32_t *m2c,
 		}
 
 	}
-	
+
 	// free memory
 	free(M);
 	delete[]k1p;

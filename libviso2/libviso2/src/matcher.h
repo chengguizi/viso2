@@ -19,6 +19,17 @@ class Matcher
 
 public:
 
+	// bucketing parameters
+	struct bucketing {  
+		bool bucket_ornot;
+		int32_t max_features;  // maximal number of features per bucket 
+		bucketing () 
+		{
+			bucket_ornot = 0;
+			max_features  = 5;
+		}
+	};
+
 	// parameter settings
 	struct parameters
 	{
@@ -27,15 +38,16 @@ public:
 		int32_t match_disp_tolerance;   // dv tolerance for stereo matches (in pixels)
 		int32_t outlier_disp_tolerance; // outlier removal: disparity tolerance (in pixels)
 		int32_t outlier_flow_tolerance; // outlier removal: flow tolerance (in pixels)
-		int32_t multi_stage;            // 0=disabled,1=multistage matching (denser and faster)
-		int32_t half_resolution;        // 0=disabled,1=match at half resolution, refine at full resolution
-		int32_t remove_outliers;		// 0=disabled,1=remove outliers using triangulation
+		bool multi_stage;            // 0=disabled,1=multistage matching (denser and faster)
+		bool half_resolution;        // 0=disabled,1=match at half resolution, refine at full resolution
+		bool remove_outliers;		// 0=disabled,1=remove outliers using triangulation
 		int32_t refinement;             // refinement (0=none,1=pixel,2=subpixel)
 		int32_t fast_threshold_dense;
 		int32_t fast_threshold_sparse;
 		int32_t numFastFeature_sparse;
 		int32_t numFastFeature_dense;
 		double  f, cu, cv, base;           // calibration (only for match prediction)
+		bucketing bucket;
 
 		// default settings
 		parameters()
@@ -45,9 +57,9 @@ public:
 			match_disp_tolerance = 2;		// default is 2
 			outlier_disp_tolerance = 5;		// default is 5
 			outlier_flow_tolerance = 5;
-			multi_stage = 0;
-			half_resolution = 0;
-			remove_outliers = 0;
+			multi_stage = false;
+			half_resolution = false;
+			remove_outliers = false;
 			fast_threshold_dense = 10;
 			fast_threshold_sparse = 40;
 			numFastFeature_sparse = 200;
@@ -115,10 +127,6 @@ public:
 	// match features currently stored in ring buffer (current and previous frame)
 	
 	void matchFeatures();
-
-	// feature bucketing: keeps only max_features per bucket, where the domain
-	// is split into buckets of size (bucket_width,bucket_height)
-	void bucketFeatures(int32_t max_features, float bucket_width, float bucket_height);
 
 	// return vector with matched feature points and indices
 	std::vector<Matcher::p_match> getMatches()
@@ -198,9 +206,9 @@ private:
 
 
 	// descriptor functions
-	inline uint8_t saturate(int16_t in);
-	void filterImageAll(uint8_t* I, uint8_t* I_du, uint8_t* I_dv, int16_t* I_f1, int16_t* I_f2, const int* dims);
-	void filterImageSobel(uint8_t* I, uint8_t* I_du, uint8_t* I_dv, const int* dims);
+	//inline uint8_t saturate(int16_t in);
+	//void filterImageAll(uint8_t* I, uint8_t* I_du, uint8_t* I_dv, int16_t* I_f1, int16_t* I_f2, const int* dims);
+	//void filterImageSobel(uint8_t* I, uint8_t* I_du, uint8_t* I_dv, const int* dims);
 	inline void computeDescriptor(const uint8_t* I_du, const uint8_t* I_dv, const int32_t &bpl, const int32_t &u, const int32_t &v, uint8_t *desc_addr);
 	inline void computeSmallDescriptor(const uint8_t* I_du, const uint8_t* I_dv, const int32_t &bpl, const int32_t &u, const int32_t &v, uint8_t *desc_addr);
 

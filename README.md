@@ -10,7 +10,9 @@ http://www.ros.org/wiki/viso2 for the list of contained packages.
 - loosen the constraint of quad matching to tolerate an error up to 2 pixels in u or v direction.
 - OpenCV visualisation added for stereo matched points.
 
+## Main Features
+- Variable covariance of pose_delta topic (body frame), with threshold matches of 60, and inlier percentage of 60%. covariance grow with a curve of power of 4.
+
 ## TODO
-- add variable covariance based on number of matches (>50 ?) & inlier percentage (>60% ?)
 - rectify realsense stereo cameras' vignetting
 - if needed implement multithreading for viso, to speed up

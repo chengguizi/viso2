@@ -4,6 +4,7 @@
 #include <ros/ros.h>
 #include <nav_msgs/Odometry.h>
 #include <std_srvs/Empty.h>
+#include <geometry_msgs/PoseWithCovarianceStamped.h>
 
 #include <tf/transform_listener.h>
 #include <tf/transform_broadcaster.h>
@@ -63,8 +64,8 @@ public:
 					"  publish_tf         = " << (publish_tf_?"true":"false"));
 	
 	// advertise
-	odom_pub_ = local_nh.advertise<nav_msgs::Odometry>("odometry", 1);
-	pose_pub_ = local_nh.advertise<geometry_msgs::PoseStamped>("pose", 1);
+	odom_pub_ = local_nh.advertise<nav_msgs::Odometry>("odometry", 3);
+	pose_pub_ = local_nh.advertise<geometry_msgs::PoseWithCovarianceStamped>("pose_delta", 3);
 
 	reset_service_ = local_nh.advertiseService("reset_pose", &OdometerBase::resetPose, this);
 
@@ -86,14 +87,16 @@ protected:
 		return sensor_frame_id_;
 	}
 
-	void setPoseCovariance(const boost::array<double, 36>& pose_covariance)
+	void setPoseCovariance(double tCov, double rCov)
 	{
-		pose_covariance_ = pose_covariance;
+		pose_covariance_[0] = pose_covariance_[7] = pose_covariance_[14] = tCov;
+		pose_covariance_[21] = pose_covariance_[28] = pose_covariance_[35] = rCov;
 	}
 
-	void setTwistCovariance(const boost::array<double, 36>& twist_covariance)
+	void setTwistCovariance(double tCov, double rCov)
 	{
-		twist_covariance_ = twist_covariance;
+		twist_covariance_[0] = twist_covariance_[7] = twist_covariance_[14] = tCov;
+		twist_covariance_[21] = twist_covariance_[28] = twist_covariance_[35] = rCov;
 	}
 
 	void integrateAndPublish(const tf::Transform& delta_transform, const ros::Time& timestamp)
@@ -163,10 +166,12 @@ protected:
 		odometry_msg.twist.covariance = twist_covariance_;
 		odom_pub_.publish(odometry_msg);
 		
-		geometry_msgs::PoseStamped pose_msg;
+		geometry_msgs::PoseWithCovarianceStamped pose_msg;
 		pose_msg.header.stamp = odometry_msg.header.stamp;
-		pose_msg.header.frame_id = odometry_msg.header.frame_id;
-		pose_msg.pose = odometry_msg.pose.pose;
+		pose_msg.header.frame_id = "delta_pose_change";
+		pose_msg.pose.covariance = twist_covariance_;
+
+		tf::poseTFToMsg(delta_transform,pose_msg.pose.pose);
 
 		pose_pub_.publish(pose_msg);
 

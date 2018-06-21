@@ -31,27 +31,8 @@ cv::Mat cv_drawMatches( cv::Mat cv_leftImg,
 cv::Mat correctGamma( cv::Mat& img, double gamma );
 
 // some arbitrary values (0.1m^2 linear cov. 10deg^2. angular cov.)
-static const boost::array<double, 36> STANDARD_POSE_COVARIANCE =
-{ { 0.1, 0, 0, 0, 0, 0,
-		0, 0.1, 0, 0, 0, 0,
-		0, 0, 0.1, 0, 0, 0,
-		0, 0, 0, 0.17, 0, 0,
-		0, 0, 0, 0, 0.17, 0,
-		0, 0, 0, 0, 0, 0.17 } };
-static const boost::array<double, 36> STANDARD_TWIST_COVARIANCE =
-{ { 0.05, 0, 0, 0, 0, 0,
-		0, 0.05, 0, 0, 0, 0,
-		0, 0, 0.05, 0, 0, 0,
-		0, 0, 0, 0.09, 0, 0,
-		0, 0, 0, 0, 0.09, 0,
-		0, 0, 0, 0, 0, 0.09 } };
-static const boost::array<double, 36> BAD_COVARIANCE =
-{ { 9999, 0, 0, 0, 0, 0,
-		0, 9999, 0, 0, 0, 0,
-		0, 0, 9999, 0, 0, 0,
-		0, 0, 0, 9999, 0, 0,
-		0, 0, 0, 0, 9999, 0,
-		0, 0, 0, 0, 0, 9999 } };
+const double std_tCov = 0.05;
+const double std_rCov = 0.09;
 
 // StereoProcessor exposes the imageCallback() for synced image and camera info (subscribers)
 // OdometerBase provides publisher to odometry and pose topic  integrateAndPublish()
@@ -100,10 +81,10 @@ public:
 		local_nh.param("image_pre_contrast", contrast_, 1.8);
 		local_nh.param("image_pre_brightness", brightness_, 90.0);
 
-		point_cloud_pub_ = local_nh.advertise<PointCloud>("point_cloud", 1);
+		//point_cloud_pub_ = local_nh.advertise<PointCloud>("point_cloud", 1);
 		info_pub_ = local_nh.advertise<VisoInfo>("info", 1);
 
-		reference_motion_ = Matrix::eye(4);
+		reference_motion_ = Matrix::eye(6);
 	}
 
 	int get_seq_processed()
@@ -137,13 +118,13 @@ protected:
 		visual_odometer_.reset(new VisualOdometryStereo(visual_odometer_params_));
 		//if (l_info_msg->header.frame_id != "") setSensorFrameId(l_info_msg->header.frame_id);
 		ROS_INFO_STREAM("Initialized libviso2 stereo odometry with the following parameters:" << std::endl << 
-										visual_odometer_params_ << 
-										"  ref_frame_change_method = " << ref_frame_change_method_ << std::endl << 
-										"  ref_frame_motion_threshold = " << ref_frame_motion_threshold_ << std::endl << 
-										"  ref_frame_inlier_threshold = " << ref_frame_inlier_threshold_ << std::endl << 
-										"  image_pre_scaling = " << scaling_ << std::endl << 
-										"  image_pre_contrast = " << contrast_ << std::endl << 
-										"  image_pre_brightness = " << brightness_);
+			visual_odometer_params_ << 
+			"  ref_frame_change_method = " << ref_frame_change_method_ << std::endl << 
+			"  ref_frame_motion_threshold = " << ref_frame_motion_threshold_ << std::endl << 
+			"  ref_frame_inlier_threshold = " << ref_frame_inlier_threshold_ << std::endl << 
+			"  image_pre_scaling = " << scaling_ << std::endl << 
+			"  image_pre_contrast = " << contrast_ << std::endl << 
+			"  image_pre_brightness = " << brightness_);
 	}
  
 	void imageCallback(
@@ -178,7 +159,7 @@ protected:
 		ROS_ASSERT(l_image_msg->width == r_image_msg->width);
 		ROS_ASSERT(l_image_msg->height == r_image_msg->height);
 
-		int dims[] = {l_image_msg->width, l_image_msg->height, l_step};
+		int dims[] = {(int)l_image_msg->width, (int)l_image_msg->height, l_step};
 
 		// ROS_INFO_STREAM("Receiving: image step =" << dims[2] << ", width= " << dims[0] << ", height= " << dims[1]);
 
@@ -339,8 +320,13 @@ protected:
 		{
 			reference_motion_ = motion; // store last motion as reference			
 
-			setPoseCovariance(STANDARD_POSE_COVARIANCE);
-			setTwistCovariance(STANDARD_TWIST_COVARIANCE);
+			setPoseCovariance(0.1,0.17);
+
+			double confidence_match =  pow (min (num_matches / 60.0, 1.0),4.0);
+			double confidence_inlier = pow (min ((double)num_inliers / (double)num_matches / 0.6 , 1.0), 4.0);
+			double factor = 1.0 / (confidence_match * confidence_inlier) ;
+
+			setTwistCovariance(std_tCov*factor, std_rCov*factor);
 
 			integrateAndPublish(delta_transform, l_image_msg->header.stamp);
 
@@ -352,8 +338,8 @@ protected:
 		}
 		else
 		{
-			setPoseCovariance(BAD_COVARIANCE);
-			setTwistCovariance(BAD_COVARIANCE);
+			setPoseCovariance(9999,9999);
+			setTwistCovariance(9999,9999);
 			//tf::Transform delta_transform;
 			delta_transform.setIdentity();
 			integrateAndPublish(delta_transform, l_image_msg->header.stamp);

@@ -24,6 +24,9 @@ bool VisualOdometryStereo::process(uint8_t *I1, uint8_t *I2, int32_t* dims, bool
 	if (left_pre < 100 || right_pre < 100 || left_curr < 100 || right_curr < 100)
 		cout << "previous feature: " << left_pre << ", " << right_pre << "; current feature: "<< left_curr << ", " << right_curr << endl;
 
+	if (left_pre == 0 || right_pre == 0 || left_curr == 0 || right_curr == 0 )
+		return false;
+
 	auto t2 = std::chrono::system_clock::now();
 	matcher->matchFeatures();
 	auto t3 = std::chrono::system_clock::now();

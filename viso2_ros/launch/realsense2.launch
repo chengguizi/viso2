@@ -1,7 +1,7 @@
 <launch>
 
-  <node pkg="tf" type="static_transform_publisher" name="bla" args="0.0 0.0 0.0 0.0 0.0 0.0  /base_link /camera  50"> 
-  </node>
+  <!-- <node pkg="tf" type="static_transform_publisher" name="bla" args="0.0 0.0 0.0 0.0 0.0 0.0  /base_link /camera  50"> 
+  </node> -->
 
 	<node pkg="viso2_ros" type="stereo_odometer" name="stereo_odometer" output="screen">
         <param name="left_image" type="str" value="/rs2_ros/left/image_rect_raw" />

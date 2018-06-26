@@ -85,6 +85,8 @@ public:
 		info_pub_ = local_nh.advertise<VisoInfo>("info", 1);
 
 		reference_motion_ = Matrix::eye(6);
+
+		ROS_INFO("StereoOdometer initialised! Waiting for images...");
 	}
 
 	int get_seq_processed()
@@ -216,16 +218,16 @@ protected:
 		// on first run or when odometer got lost, only feed the odometer with 
 		// images without retrieving data
 
-		static long long pre_seq;
+		static std_msgs::Header pre_header;
 		if (first_run) // || got_lost_
 		{
 			visual_odometer_->process(cv_leftImg.data, cv_rightImg.data, dims);
 			got_lost_ = false;
 			// on first run publish zero once
-			tf::Transform delta_transform;
-			delta_transform.setIdentity();
-			integrateAndPublish(delta_transform, l_image_msg->header.stamp);
-			pre_seq = l_info_msg->header.seq;
+			//tf::Transform delta_transform;
+			//delta_transform.setIdentity();
+			//integrateAndPublish(delta_transform, l_image_msg->header.stamp, ros::Time(0));
+			pre_header = l_info_msg->header;
 			_threadDone = true;
 			return;
 		}
@@ -233,15 +235,15 @@ protected:
 
 		// check if we manage to process continuous frames in time
 		const int max_missing = 2;
-		if (pre_seq + 2 < l_info_msg->header.seq)
+		if (pre_header.seq + 2 < l_info_msg->header.seq)
 		{
-			ROS_WARN_STREAM("Missing (" << l_info_msg->header.seq - pre_seq - 1 << ") frames...");
+			ROS_WARN_STREAM("Missing (" << l_info_msg->header.seq - pre_header.seq - 1 << ") frames...");
 			change_reference_frame_ = false; // since there is skipped frames, better to be safe and do per frame motion estimate
 		}
 			
 		// else
 		// 	ROS_INFO_STREAM("Processing Frame: " << l_info_msg->header.seq);
-		pre_seq = l_info_msg->header.seq;
+		
 
 		// ACTUAL PROCESS()
 		// change_reference_frame_ == replace, whereby previous frame holds the same, only current frame changes
@@ -275,12 +277,12 @@ protected:
 			// image was not replaced, report full motion from odometer
 			camera_motion = motion;
 		}
-		tf::Matrix3x3 rot_mat(
+		tf2::Matrix3x3 rot_mat(
 				camera_motion.val[0][0], camera_motion.val[0][1], camera_motion.val[0][2],
 				camera_motion.val[1][0], camera_motion.val[1][1], camera_motion.val[1][2],
 				camera_motion.val[2][0], camera_motion.val[2][1], camera_motion.val[2][2]);
-		tf::Vector3 t(camera_motion.val[0][3], camera_motion.val[1][3], camera_motion.val[2][3]);
-		tf::Transform delta_transform(rot_mat, t);
+		tf2::Vector3 t(camera_motion.val[0][3], camera_motion.val[1][3], camera_motion.val[2][3]);
+		tf2::Transform delta_transform(rot_mat, t);
 
 		change_reference_frame_ = false; // default
 		if(success && num_inliers > ref_frame_inlier_threshold_)
@@ -320,15 +322,16 @@ protected:
 		{
 			reference_motion_ = motion; // store last motion as reference			
 
-			setPoseCovariance(0.1,0.17);
+			
 
 			double confidence_match =  pow (min (num_matches / 60.0, 1.0),4.0);
 			double confidence_inlier = pow (min ((double)num_inliers / (double)num_matches / 0.6 , 1.0), 4.0);
 			double factor = 1.0 / (confidence_match * confidence_inlier) ;
 
+			setPoseCovariance(std_tCov*factor, std_rCov*factor);
 			setTwistCovariance(std_tCov*factor, std_rCov*factor);
 
-			integrateAndPublish(delta_transform, l_image_msg->header.stamp);
+			integrateAndPublish(delta_transform, l_image_msg->header.stamp, pre_header.stamp);
 
 			if (point_cloud_pub_.getNumSubscribers() > 0)
 			{
@@ -341,8 +344,8 @@ protected:
 			setPoseCovariance(9999,9999);
 			setTwistCovariance(9999,9999);
 			//tf::Transform delta_transform;
-			delta_transform.setIdentity();
-			integrateAndPublish(delta_transform, l_image_msg->header.stamp);
+			//delta_transform.setIdentity();
+			//integrateAndPublish(delta_transform, l_image_msg->header.stamp, pre_header.stamp);
 
 			ROS_WARN("Visual Odometer got lost!");
 			got_lost_ = true;
@@ -364,6 +367,8 @@ protected:
 		info_pub_.publish(info_msg);
 
 		//std::cout << "processed Frame: " << _seq_processed << std::endl;
+
+		pre_header = l_info_msg->header;
 	}
 
 	double computeFeatureFlow(

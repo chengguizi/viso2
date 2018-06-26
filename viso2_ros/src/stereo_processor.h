@@ -90,6 +90,8 @@ private:
 
 	void checkInputsSynchronized()
 	{
+		if (!all_received_)
+			return;
 		int threshold = 3 * all_received_;
 		if (left_received_ >= threshold || right_received_ >= threshold || 
 				left_info_received_ >= threshold || right_info_received_ >= threshold) {

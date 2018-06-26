@@ -6,8 +6,17 @@
 #include <std_srvs/Empty.h>
 #include <geometry_msgs/PoseWithCovarianceStamped.h>
 
-#include <tf/transform_listener.h>
-#include <tf/transform_broadcaster.h>
+#include <tf2_ros/transform_broadcaster.h>
+#include <tf2_ros/transform_listener.h>
+#include <tf2_ros/buffer.h>
+#include <tf2/LinearMath/Quaternion.h>
+#include <tf2/LinearMath/Vector3.h>
+#include <tf2/LinearMath/Matrix3x3.h>
+#include <tf2/LinearMath/Transform.h>
+#include <tf2/LinearMath/Scalar.h>
+#include <tf2_geometry_msgs/tf2_geometry_msgs.h>
+
+#include <geometry_msgs/TransformStamped.h>
 
 namespace viso2_ros
 {
@@ -24,8 +33,9 @@ private:
 
 	
 	// publisher
-	ros::Publisher odom_pub_;
-	ros::Publisher pose_pub_;
+	ros::Publisher odom_pub_; // odometry using pure VO algorithm, no fusion at all
+	ros::Publisher pose_pub_; // odometry in pose format using pure VO algorithm, no fusion at all
+	ros::Publisher pose_iw_pub_; // pose change with respect to world frame
 
 	ros::ServiceServer reset_service_;
 
@@ -33,14 +43,13 @@ private:
 	std::string sensor_frame_id_;
 	std::string odom_frame_id_;
 	std::string base_link_frame_id_;
-	tf::TransformListener tf_listener_;
-	tf::TransformBroadcaster tf_broadcaster_;
+	tf2_ros::Buffer tfBuffer;
+	tf2_ros::TransformListener tf_listener_;
+	tf2_ros::TransformBroadcaster tf_broadcaster_;
 	bool publish_tf_;
 
 	// the current integrated camera pose
-	tf::Transform integrated_pose_;
-	// timestamp of the last update
-	ros::Time last_update_time_;
+	tf2::Transform integrated_vo_pose_;
 
 	// covariances
 	boost::array<double, 36> pose_covariance_;
@@ -48,31 +57,36 @@ private:
 
 public:
 
-	OdometerBase()
+	OdometerBase() : tf_listener_(tfBuffer)
 	{
 	// Read local parameters
 	ros::NodeHandle local_nh("~");
 
-	local_nh.param("odom_frame_id", odom_frame_id_, std::string("/odom"));
-	local_nh.param("base_link_frame_id", base_link_frame_id_, std::string("/base_link"));
-	local_nh.param("sensor_frame_id", sensor_frame_id_, std::string("/camera"));
+	local_nh.param("odom_frame_id", odom_frame_id_, std::string("visual_frame"));
+	local_nh.param("base_link_frame_id", base_link_frame_id_, std::string("imu_frame"));
+	local_nh.param("sensor_frame_id", sensor_frame_id_, std::string("camera_frame"));
 	local_nh.param("publish_tf", publish_tf_, true);
 
 	ROS_INFO_STREAM("Basic Odometer Settings:" << std::endl <<
-					"  odom_frame_id      = " << odom_frame_id_ << std::endl <<
-					"  base_link_frame_id = " << base_link_frame_id_ << std::endl <<
-					"  publish_tf         = " << (publish_tf_?"true":"false"));
+			"  odom_frame_id      = " << odom_frame_id_ << std::endl <<
+			"  base_link_frame_id = " << base_link_frame_id_ << std::endl <<
+			"  sensor_frame_id    = " << sensor_frame_id_ << std::endl <<
+			"  publish_tf         = " << (publish_tf_ ? "true":"false"));
 	
 	// advertise
 	odom_pub_ = local_nh.advertise<nav_msgs::Odometry>("odometry", 3);
-	pose_pub_ = local_nh.advertise<geometry_msgs::PoseWithCovarianceStamped>("pose_delta", 3);
+	pose_pub_ = local_nh.advertise<geometry_msgs::PoseWithCovarianceStamped>("pose", 3);
+	pose_iw_pub_ = local_nh.advertise<geometry_msgs::PoseWithCovarianceStamped>("pose_iw_", 3);
 
+	// reset service
 	reset_service_ = local_nh.advertiseService("reset_pose", &OdometerBase::resetPose, this);
 
-	integrated_pose_.setIdentity();
+	// reset outputs for publishers
 
+	integrated_vo_pose_.setIdentity();
 	pose_covariance_.assign(0.0);
 	twist_covariance_.assign(0.0);
+	
 	}
 
 protected:
@@ -99,63 +113,79 @@ protected:
 		twist_covariance_[21] = twist_covariance_[28] = twist_covariance_[35] = rCov;
 	}
 
-	void integrateAndPublish(const tf::Transform& delta_transform, const ros::Time& timestamp)
+	void integrateAndPublish(const tf2::Transform& delta_transform, const ros::Time& time_curr, const ros::Time& time_pre)
 	{
-		if (sensor_frame_id_.empty())
+		// sanity check
+		if (time_pre.isZero())
 		{
-			ROS_ERROR("[odometer] update called with unknown sensor frame id!");
+			ROS_WARN("[odometer] time_pre is zero!");
 			return;
 		}
-		if (timestamp < last_update_time_)
+		if (  fabs((time_curr - time_pre).toSec()) > 5.0 )
 		{
-			ROS_WARN("[odometer] saw negative time change in incoming sensor data, resetting pose.");
-			integrated_pose_.setIdentity();
-			tf_listener_.clear();
+			ROS_WARN("[odometer] timestamps between frames larger than 5 seconds! consider to reset the odometry");
+			return;
 		}
-		integrated_pose_ *= delta_transform;
-
-		// transform integrated pose to base frame
-		tf::StampedTransform base_to_sensor;
-		std::string error_msg;
-		if (tf_listener_.canTransform(base_link_frame_id_, sensor_frame_id_, timestamp, &error_msg))
+		if (time_curr < time_pre)
 		{
-			tf_listener_.lookupTransform(
+			ROS_WARN("[odometer] saw negative time change in incoming sensor data! consider to reset the odometry");
+			return;
+		}
+
+		bool do_publish_for_ekf = true;
+
+		//// HM: the integrated pose is with respect to the left camera center ////
+
+		//// INTEGRATION ////
+
+		//////////////////////////////////
+		// STEP 1, publish visual odometry
+		//////////////////////////////////
+
+		tf2::Stamped<tf2::Transform> base_to_sensor;
+		
+		try
+		{
+			geometry_msgs::TransformStamped base_to_sensor_msg = tfBuffer.lookupTransform(
 				base_link_frame_id_, // target_frame
 				sensor_frame_id_, // source_frame
-				timestamp, base_to_sensor); // target to base
+				time_pre ); // target to source
+
+			tf2::fromMsg(base_to_sensor_msg, base_to_sensor);
+			ROS_ASSERT(base_to_sensor_msg.header.stamp == time_pre);
 		}
-		else
-		{
-			ROS_WARN_THROTTLE(200.0, "The tf from '%s' to '%s' does not seem to be available, "
-									"will assume it as identity!", 
-									base_link_frame_id_.c_str(),
-									sensor_frame_id_.c_str());
-			ROS_DEBUG("Transform error: %s", error_msg.c_str());
+		catch (tf2::TransformException ex){
+			ROS_ERROR_THROTTLE(5, "base_to_sensor: %s",ex.what());	
 			base_to_sensor.setIdentity();
+			do_publish_for_ekf = false;
 		}
 
-		tf::Transform base_transform = base_to_sensor * integrated_pose_ * base_to_sensor.inverse();
+		// calculate VO integrated pose (Camera-centred)
+		integrated_vo_pose_ *= delta_transform; // HM: behave like matrix multiplication in homogenous coordinates
+
+		// calculate VO integrated pose (IMU-centred), with IMU-Camera calibration
+		tf2::Transform base_transform = base_to_sensor * integrated_vo_pose_ * base_to_sensor.inverse();
 
 		nav_msgs::Odometry odometry_msg;
-		odometry_msg.header.stamp = timestamp;
-		odometry_msg.header.frame_id = odom_frame_id_;
-		odometry_msg.child_frame_id = base_link_frame_id_;
-		tf::poseTFToMsg(base_transform, odometry_msg.pose.pose);
+		odometry_msg.header.stamp = time_curr;
+		odometry_msg.header.frame_id = odom_frame_id_;  // this is the fixed "global" frame
+		odometry_msg.child_frame_id = base_link_frame_id_; // this is the reference body frame
+		tf2::toMsg(base_transform, odometry_msg.pose.pose);
 
 		// calculate twist (not possible for first run as no delta_t can be computed)
-		tf::Transform delta_base_transform = base_to_sensor * delta_transform * base_to_sensor.inverse();
-		if (!last_update_time_.isZero())
+		tf2::Transform delta_base_transform = base_to_sensor * delta_transform * base_to_sensor.inverse();
+		if (!time_pre.isZero())
 		{
-			double delta_t = (timestamp - last_update_time_).toSec();
+			double delta_t = (time_curr - time_pre).toSec();
 			if (delta_t)
 			{
 			odometry_msg.twist.twist.linear.x = delta_base_transform.getOrigin().getX() / delta_t;
 			odometry_msg.twist.twist.linear.y = delta_base_transform.getOrigin().getY() / delta_t;
 			odometry_msg.twist.twist.linear.z = delta_base_transform.getOrigin().getZ() / delta_t;
-			tf::Quaternion delta_rot = delta_base_transform.getRotation();
-			tfScalar angle = delta_rot.getAngle();
-			tf::Vector3 axis = delta_rot.getAxis();
-			tf::Vector3 angular_twist = axis * angle / delta_t;
+			tf2::Quaternion delta_rot = delta_base_transform.getRotation();
+			tf2Scalar angle = delta_rot.getAngle();
+			tf2::Vector3 axis = delta_rot.getAxis();
+			tf2::Vector3 angular_twist = axis * angle / delta_t;
 			odometry_msg.twist.twist.angular.x = angular_twist.x();
 			odometry_msg.twist.twist.angular.y = angular_twist.y();
 			odometry_msg.twist.twist.angular.z = angular_twist.z();
@@ -165,30 +195,65 @@ protected:
 		odometry_msg.pose.covariance = pose_covariance_; // pose_covariance_ is defined outside
 		odometry_msg.twist.covariance = twist_covariance_;
 		odom_pub_.publish(odometry_msg);
-		
+
+		//////////////////////////////////
+		// STEP 2, publish visual odometry (pose)
+		//////////////////////////////////
 		geometry_msgs::PoseWithCovarianceStamped pose_msg;
 		pose_msg.header.stamp = odometry_msg.header.stamp;
-		pose_msg.header.frame_id = "delta_pose_change";
-		pose_msg.pose.covariance = twist_covariance_;
-
-		tf::poseTFToMsg(delta_transform,pose_msg.pose.pose);
+		pose_msg.header.frame_id = odometry_msg.header.frame_id;
+		pose_msg.pose.covariance = pose_covariance_;
+		pose_msg.pose.pose = odometry_msg.pose.pose;
 
 		pose_pub_.publish(pose_msg);
 
-		if (publish_tf_)
+
+		//////////////////////////////////
+		// STEP 3, publish world frame pose estimate (for EKF)
+		//////////////////////////////////
+		tf2::Stamped<tf2::Transform> world_to_base;
+		
+		try
 		{
-			tf_broadcaster_.sendTransform(
-				tf::StampedTransform(base_transform, timestamp,
-				odom_frame_id_, base_link_frame_id_));
+			geometry_msgs::TransformStamped world_to_base_msg = tfBuffer.lookupTransform(
+				"world_frame", // target_frame
+				base_link_frame_id_, // source_frame
+				time_pre); // target to source
+
+			tf2::fromMsg(world_to_base_msg, world_to_base);
+
+			ROS_ASSERT(world_to_base_msg.header.stamp == time_pre);
+		}
+		catch (tf2::TransformException ex){
+
+			ROS_ERROR_THROTTLE(5,"world_to_base: %s",ex.what());
+			world_to_base.setIdentity();
+			do_publish_for_ekf = false;
 		}
 
-		last_update_time_ = timestamp;
+		if ( do_publish_for_ekf )
+		{
+			tf2::Transform world_transform = world_to_base * base_to_sensor * delta_transform * base_to_sensor.inverse();
+			geometry_msgs::PoseWithCovarianceStamped pose_iw_msg;
+			pose_iw_msg.header.stamp = odometry_msg.header.stamp;
+			pose_iw_msg.header.frame_id = "world_frame";
+			pose_iw_msg.pose.covariance = twist_covariance_;
+			tf2::toMsg(world_transform, pose_iw_msg.pose.pose);	
+			pose_iw_pub_.publish(pose_iw_msg);
+		}
+
+		// tf_broadcaster_.sendTransform(tf::StampedTransform(base_transform, time_curr,
+		// 	odom_frame_id_, base_link_frame_id_));
 	}
 
 
 	bool resetPose(std_srvs::Empty::Request&, std_srvs::Empty::Response&)
 	{
-		integrated_pose_.setIdentity();
+		integrated_vo_pose_.setIdentity();
+		pose_covariance_.assign(0.0);
+		twist_covariance_.assign(0.0);		
+
+		ROS_INFO("==========Request to Reset Pose, Completed==============");
 		return true;
 	}
 

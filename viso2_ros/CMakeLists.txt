@@ -18,7 +18,8 @@ find_package(catkin REQUIRED COMPONENTS
   image_transport 
   cv_bridge 
   image_geometry 
-  tf 
+  tf2_ros
+  tf2_geometry_msgs
   pcl_ros 
   std_srvs
   message_generation

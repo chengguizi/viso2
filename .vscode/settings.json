@@ -24,6 +24,13 @@
         "thread": "cpp",
         "cinttypes": "cpp",
         "typeindex": "cpp",
-        "*.ipp": "cpp"
+        "*.ipp": "cpp",
+        "clocale": "cpp",
+        "*.tcc": "cpp",
+        "condition_variable": "cpp",
+        "future": "cpp",
+        "mutex": "cpp",
+        "system_error": "cpp",
+        "codecvt": "cpp"
     }
 }

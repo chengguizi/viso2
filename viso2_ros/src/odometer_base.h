@@ -48,6 +48,8 @@ private:
 	tf2_ros::TransformBroadcaster tf_broadcaster_;
 	bool publish_tf_;
 
+	ros::Time global_start_;
+
 	// the current integrated camera pose
 	tf2::Transform integrated_vo_pose_;
 
@@ -57,7 +59,7 @@ private:
 
 public:
 
-	OdometerBase() : tf_listener_(tfBuffer)
+	OdometerBase() : tf_listener_(tfBuffer), global_start_(0)
 	{
 	// Read local parameters
 	ros::NodeHandle local_nh("~");
@@ -115,6 +117,8 @@ protected:
 
 	void integrateAndPublish(const tf2::Transform& delta_transform, const ros::Time& time_curr, const ros::Time& time_pre)
 	{
+
+		bool do_publish_for_ekf = true;
 		// sanity check
 		if (time_pre.isZero())
 		{
@@ -131,40 +135,30 @@ protected:
 			ROS_WARN("[odometer] saw negative time change in incoming sensor data! consider to reset the odometry");
 			return;
 		}
-
-		bool do_publish_for_ekf = true;
+		if (!global_start_.isZero() && global_start_ > time_pre )
+		{
+			ROS_WARN_STREAM("[odometer] EKF initiated, but ignorning frames before global start time : " << time_pre);
+			do_publish_for_ekf = false;
+		}
 
 		//// HM: the integrated pose is with respect to the left camera center ////
 
 		//// INTEGRATION ////
 
+		
+
+		//std::cout << "delta_transform: " << tf2::toMsg(delta_transform) << std::endl;
+
 		//////////////////////////////////
 		// STEP 1, publish visual odometry
 		//////////////////////////////////
 
-		tf2::Stamped<tf2::Transform> base_to_sensor;
-		
-		try
-		{
-			geometry_msgs::TransformStamped base_to_sensor_msg = tfBuffer.lookupTransform(
-				base_link_frame_id_, // target_frame
-				sensor_frame_id_, // source_frame
-				time_pre ); // target to source
-
-			tf2::fromMsg(base_to_sensor_msg, base_to_sensor);
-			ROS_ASSERT(base_to_sensor_msg.header.stamp == time_pre);
-		}
-		catch (tf2::TransformException ex){
-			ROS_ERROR_THROTTLE(5, "base_to_sensor: %s",ex.what());	
-			base_to_sensor.setIdentity();
-			do_publish_for_ekf = false;
-		}
-
 		// calculate VO integrated pose (Camera-centred)
+		// delta_transform consist of active rotation matrix of frames t-1 to t
 		integrated_vo_pose_ *= delta_transform; // HM: behave like matrix multiplication in homogenous coordinates
 
-		// calculate VO integrated pose (IMU-centred), with IMU-Camera calibration
-		tf2::Transform base_transform = base_to_sensor * integrated_vo_pose_ * base_to_sensor.inverse();
+		// calculate VO integrated pose (Camera-centred)
+		tf2::Transform base_transform = integrated_vo_pose_;
 
 		nav_msgs::Odometry odometry_msg;
 		odometry_msg.header.stamp = time_curr;
@@ -173,7 +167,7 @@ protected:
 		tf2::toMsg(base_transform, odometry_msg.pose.pose);
 
 		// calculate twist (not possible for first run as no delta_t can be computed)
-		tf2::Transform delta_base_transform = base_to_sensor * delta_transform * base_to_sensor.inverse();
+		tf2::Transform delta_base_transform = delta_transform ;
 		if (!time_pre.isZero())
 		{
 			double delta_t = (time_curr - time_pre).toSec();
@@ -211,6 +205,26 @@ protected:
 		//////////////////////////////////
 		// STEP 3, publish world frame pose estimate (for EKF)
 		//////////////////////////////////
+		tf2::Stamped<tf2::Transform> base_to_sensor;
+		
+		try
+		{
+			geometry_msgs::TransformStamped base_to_sensor_msg = tfBuffer.lookupTransform(
+				base_link_frame_id_, // target_frame
+				sensor_frame_id_, // source_frame
+				time_pre ); // target to source
+
+			tf2::fromMsg(base_to_sensor_msg, base_to_sensor);
+			ROS_INFO_STREAM_THROTTLE(0.5, "base_to_sensor: " << base_to_sensor_msg );
+			
+		}
+		catch (tf2::TransformException ex){
+			if (!global_start_.isZero())
+				ROS_ERROR( "base_to_sensor: %s",ex.what());	
+			base_to_sensor.setIdentity();
+			do_publish_for_ekf = false;
+		}
+
 		tf2::Stamped<tf2::Transform> world_to_base;
 		
 		try
@@ -221,25 +235,36 @@ protected:
 				time_pre); // target to source
 
 			tf2::fromMsg(world_to_base_msg, world_to_base);
-
-			ROS_ASSERT(world_to_base_msg.header.stamp == time_pre);
+			ROS_INFO_STREAM_THROTTLE(1, "world_to_base: " << world_to_base_msg);
+			
 		}
 		catch (tf2::TransformException ex){
-
-			ROS_ERROR_THROTTLE(5,"world_to_base: %s",ex.what());
+			if (!global_start_.isZero())
+				ROS_ERROR("world_to_base: %s",ex.what());
 			world_to_base.setIdentity();
 			do_publish_for_ekf = false;
 		}
 
+		
+
 		if ( do_publish_for_ekf )
 		{
-			tf2::Transform world_transform = world_to_base * base_to_sensor * delta_transform * base_to_sensor.inverse();
+			static int _seq = 0;
+
+			// read from left to right, base_to_sensor.inverse() assume slow changing calibration
+			tf2::Transform world_transform = world_to_base * base_to_sensor * delta_transform * base_to_sensor.inverse(); // * base_to_sensor.inverse()
 			geometry_msgs::PoseWithCovarianceStamped pose_iw_msg;
-			pose_iw_msg.header.stamp = odometry_msg.header.stamp;
+			pose_iw_msg.header.stamp = time_curr;
+			pose_iw_msg.header.seq = _seq++;
 			pose_iw_msg.header.frame_id = "world_frame";
 			pose_iw_msg.pose.covariance = twist_covariance_;
+
+			// std::cout << "origin:" <<  world_transform.getOrigin()  << std::endl;
+			// std::cout << "rotation:" <<  world_transform.getRotation()  << std::endl;
 			tf2::toMsg(world_transform, pose_iw_msg.pose.pose);	
 			pose_iw_pub_.publish(pose_iw_msg);
+
+			ROS_INFO_STREAM("EKF Measurement Published! seq = " << pose_iw_msg.header.seq);
 		}
 
 		// tf_broadcaster_.sendTransform(tf::StampedTransform(base_transform, time_curr,
@@ -251,9 +276,11 @@ protected:
 	{
 		integrated_vo_pose_.setIdentity();
 		pose_covariance_.assign(0.0);
-		twist_covariance_.assign(0.0);		
+		twist_covariance_.assign(0.0);
+		global_start_ = ros::Time::now();
 
 		ROS_INFO("==========Request to Reset Pose, Completed==============");
+		ROS_INFO_STREAM("==============Global Start Time: " << global_start_ <<"==============");
 		return true;
 	}
 

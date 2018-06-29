@@ -31,8 +31,7 @@ cv::Mat cv_drawMatches( cv::Mat cv_leftImg,
 cv::Mat correctGamma( cv::Mat& img, double gamma );
 
 // some arbitrary values (0.1m^2 linear cov. 10deg^2. angular cov.)
-const double std_tCov = 0.05;
-const double std_rCov = 0.09;
+
 
 // StereoProcessor exposes the imageCallback() for synced image and camera info (subscribers)
 // OdometerBase provides publisher to odometry and pose topic  integrateAndPublish()
@@ -51,6 +50,9 @@ private:
 	double scaling_;
 	double contrast_;
 	double brightness_;
+
+	double std_tCov_;
+	double std_rCov_;
 
 	// change reference frame method. 0, 1 or 2. 0 means allways change. 1 and 2 explained below
 	int ref_frame_change_method_;
@@ -80,6 +82,9 @@ public:
 		local_nh.param("image_pre_scaling", scaling_, 0.5);
 		local_nh.param("image_pre_contrast", contrast_, 1.8);
 		local_nh.param("image_pre_brightness", brightness_, 90.0);
+
+		local_nh.param("noise_translation", std_tCov_, 0.005);
+		local_nh.param("noise_rotation", std_rCov_,  0.009);
 
 		//point_cloud_pub_ = local_nh.advertise<PointCloud>("point_cloud", 1);
 		info_pub_ = local_nh.advertise<VisoInfo>("info", 1);
@@ -261,7 +266,7 @@ protected:
 
 		// regardless of success or not calculate the transform
 		Matrix motion = Matrix::inv(visual_odometer_->getMotion()); // getMotion is a change-of-frame transformation from t-1 to t
-		// therefore, motion is the active transformation from t-1 to t;
+		// therefore, motion is the active transformation from t-1 to t; in t-1 coordinates
 		//ROS_DEBUG_STREAM("libviso2 returned the following motion:\n" << motion);
 
 
@@ -328,8 +333,8 @@ protected:
 			double confidence_inlier = pow (min ((double)num_inliers / (double)num_matches / 0.6 , 1.0), 4.0);
 			double factor = 1.0 / (confidence_match * confidence_inlier) ;
 
-			setPoseCovariance(std_tCov*factor, std_rCov*factor);
-			setTwistCovariance(std_tCov*factor, std_rCov*factor);
+			setPoseCovariance(std_tCov_*factor, std_rCov_*factor);
+			setTwistCovariance(std_tCov_*factor, std_rCov_*factor);
 
 			integrateAndPublish(delta_transform, l_image_msg->header.stamp, pre_header.stamp);
 

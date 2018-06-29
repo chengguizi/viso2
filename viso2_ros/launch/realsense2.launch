@@ -27,7 +27,9 @@
         <param name="image_pre_scaling" type="double" value="0.5" />
         <param name="image_pre_contrast" type="double" value="1.6" />   
         <param name="image_pre_brightness" type="double" value="60.0" />   
-        
+
+        <param name="noise_translation" type="double" value="0.0000001" />   
+        <param name="noise_rotation" type="double" value="0.00001" /> 
 	</node>
 
 

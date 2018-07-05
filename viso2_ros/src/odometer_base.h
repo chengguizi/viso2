@@ -4,6 +4,7 @@
 #include <ros/ros.h>
 #include <nav_msgs/Odometry.h>
 #include <std_srvs/Empty.h>
+#include <std_srvs/SetBool.h>
 #include <geometry_msgs/PoseWithCovarianceStamped.h>
 
 #include <tf2_ros/transform_broadcaster.h>
@@ -38,6 +39,7 @@ private:
 	ros::Publisher pose_iw_pub_; // pose change with respect to world frame
 
 	ros::ServiceServer reset_service_;
+	ros::ServiceServer toggle_ekfout_service_;
 
 	// tf related
 	std::string sensor_frame_id_;
@@ -50,6 +52,8 @@ private:
 
 	ros::Time global_start_;
 
+	bool isEKFEnabled;
+
 	// the current integrated camera pose
 	tf2::Transform integrated_vo_pose_;
 
@@ -59,7 +63,7 @@ private:
 
 public:
 
-	OdometerBase() : tf_listener_(tfBuffer), global_start_(0)
+	OdometerBase() : tf_listener_(tfBuffer), global_start_(0), isEKFEnabled(false)
 	{
 	// Read local parameters
 	ros::NodeHandle local_nh("~");
@@ -82,6 +86,7 @@ public:
 
 	// reset service
 	reset_service_ = local_nh.advertiseService("reset_pose", &OdometerBase::resetPose, this);
+	toggle_ekfout_service_ = local_nh.advertiseService("set_ekfout", &OdometerBase::setEKFOut, this);
 
 	// reset outputs for publishers
 
@@ -161,7 +166,12 @@ protected:
 		tf2::Transform base_transform = integrated_vo_pose_;
 
 		nav_msgs::Odometry odometry_msg;
-		odometry_msg.header.stamp = time_curr;
+
+		if (isEKFEnabled)
+			odometry_msg.header.stamp = time_curr;
+		else
+			odometry_msg.header.stamp = ros::Time(0);
+
 		odometry_msg.header.frame_id = odom_frame_id_;  // this is the fixed "global" frame
 		odometry_msg.child_frame_id = base_link_frame_id_; // this is the reference body frame
 		tf2::toMsg(base_transform, odometry_msg.pose.pose);
@@ -194,8 +204,7 @@ protected:
 		// STEP 2, publish visual odometry (pose)
 		//////////////////////////////////
 		geometry_msgs::PoseWithCovarianceStamped pose_msg;
-		pose_msg.header.stamp = odometry_msg.header.stamp;
-		pose_msg.header.frame_id = odometry_msg.header.frame_id;
+		pose_msg.header = odometry_msg.header;
 		pose_msg.pose.covariance = pose_covariance_;
 		pose_msg.pose.pose = odometry_msg.pose.pose;
 
@@ -215,7 +224,7 @@ protected:
 				time_pre ); // target to source
 
 			tf2::fromMsg(base_to_sensor_msg, base_to_sensor);
-			ROS_INFO_STREAM_THROTTLE(0.5, "base_to_sensor: " << base_to_sensor_msg );
+			// ROS_INFO_STREAM_THROTTLE(0.5, "base_to_sensor: " << base_to_sensor_msg );
 			
 		}
 		catch (tf2::TransformException ex){
@@ -235,7 +244,7 @@ protected:
 				time_pre); // target to source
 
 			tf2::fromMsg(world_to_base_msg, world_to_base);
-			ROS_INFO_STREAM_THROTTLE(1, "world_to_base: " << world_to_base_msg);
+			// ROS_INFO_STREAM_THROTTLE(1, "world_to_base: " << world_to_base_msg);
 			
 		}
 		catch (tf2::TransformException ex){
@@ -247,15 +256,13 @@ protected:
 
 		
 
-		if ( do_publish_for_ekf )
+		if ( do_publish_for_ekf && isEKFEnabled )
 		{
-			static int _seq = 0;
 
 			// read from left to right, base_to_sensor.inverse() assume slow changing calibration
 			tf2::Transform world_transform = world_to_base * base_to_sensor * delta_transform * base_to_sensor.inverse(); // * base_to_sensor.inverse()
 			geometry_msgs::PoseWithCovarianceStamped pose_iw_msg;
 			pose_iw_msg.header.stamp = time_curr;
-			pose_iw_msg.header.seq = _seq++;
 			pose_iw_msg.header.frame_id = "world_frame";
 			pose_iw_msg.pose.covariance = twist_covariance_;
 
@@ -264,7 +271,7 @@ protected:
 			tf2::toMsg(world_transform, pose_iw_msg.pose.pose);	
 			pose_iw_pub_.publish(pose_iw_msg);
 
-			ROS_INFO_STREAM("EKF Measurement Published! seq = " << pose_iw_msg.header.seq);
+			ROS_INFO_STREAM("EKF Measurement Published!");
 		}
 
 		// tf_broadcaster_.sendTransform(tf::StampedTransform(base_transform, time_curr,
@@ -278,9 +285,19 @@ protected:
 		pose_covariance_.assign(0.0);
 		twist_covariance_.assign(0.0);
 		global_start_ = ros::Time::now();
+		// isEKFEnabled = true;
 
 		ROS_INFO("==========Request to Reset Pose, Completed==============");
 		ROS_INFO_STREAM("==============Global Start Time: " << global_start_ <<"==============");
+		// ROS_WARN_STREAM("EKF Output Mode Changed to " << (isEKFEnabled ?  "Enabled." : "Disabled.") );
+		return true;
+	}
+
+	bool setEKFOut(std_srvs::SetBool::Request& request, std_srvs::SetBool::Response& response)
+	{
+		isEKFEnabled = request.data;
+		ROS_WARN_STREAM("EKF Output Mode Changed to " << (isEKFEnabled ?  "Enabled." : "Disabled.") );
+		response.success = true;
 		return true;
 	}
 

@@ -68,8 +68,8 @@ public:
 
 	typedef pcl::PointCloud<pcl::PointXYZRGB> PointCloud;
 
-	StereoOdometer(const std::string& transport) : 
-		StereoProcessor(transport), OdometerBase(), 
+	StereoOdometer(const std::string& transport, const int queue_size) : 
+		StereoProcessor(transport, queue_size), OdometerBase(), 
 		got_lost_(false), change_reference_frame_(false), _seq_processed(0)
 	{
 		// Read local parameters
@@ -180,22 +180,6 @@ protected:
 		cv_leftImg_source.convertTo(cv_leftImg_source,-1,contrast_,b);
 		cv_rightImg_source.convertTo(cv_rightImg_source,-1,contrast_,b);
 
-		// cv::Mat blur_left(cv::Size(dims[0], dims[1]), CV_8UC1);
-		// cv::Mat blur_right(cv::Size(dims[0], dims[1]), CV_8UC1);
-
-		// cv::GaussianBlur(cv_leftImg,blur_left,cv::Size(0,0),3);
-		// cv::GaussianBlur(cv_rightImg,blur_right,cv::Size(0,0),3);
-
-		// cv::addWeighted(cv_leftImg, 1.5, blur_left, -0.5, 0, cv_leftImg);
-		// cv::addWeighted(cv_rightImg, 1.5, blur_right, -0.5, 0, cv_rightImg);
-
-		// cv::fastNlMeansDenoising(cv_leftImg,cv_leftImg);
-		// cv::fastNlMeansDenoising(cv_rightImg,cv_rightImg);
-
-		// auto clache = cv::createCLAHE(2,cv::Size(6,8));
-		// clache->apply(cv_leftImg_source,cv_leftImg_source);
-		// clache->apply(cv_rightImg_source,cv_rightImg_source);
-
 		cv::Mat cv_leftImg;
 		cv::Mat cv_rightImg;
 		
@@ -206,22 +190,6 @@ protected:
 		dims[1] = cv_leftImg.rows;
 		dims[2] = cv_leftImg.cols;
 
-		// ROS_INFO_STREAM("after: image step =" << dims[2] << ", width= " << dims[0] << ", height= " << dims[1]);
-
-		// cv::equalizeHist(cv_leftImg,cv_leftImg);
-		// cv::equalizeHist(cv_rightImg,cv_rightImg);
-
-		// cv::Mat leftbuffer(cv::Size(dims[0], dims[1]), CV_8UC1);
-		// cv::Mat rightbuffer(cv::Size(dims[0], dims[1]), CV_8UC1);
-
-		// clache->apply(cv_leftImg,leftbuffer);
-		// clache->apply(cv_rightImg,rightbuffer);
-		
-		// cv::bilateralFilter(leftbuffer,cv_leftImg,10,5,3);
-		// cv::bilateralFilter(rightbuffer,cv_rightImg,10,5,3);
-
-		// on first run or when odometer got lost, only feed the odometer with 
-		// images without retrieving data
 
 		static std_msgs::Header pre_header;
 		if (first_run) // || got_lost_
@@ -233,7 +201,6 @@ protected:
 			//delta_transform.setIdentity();
 			//integrateAndPublish(delta_transform, l_image_msg->header.stamp, ros::Time(0));
 			pre_header = l_info_msg->header;
-			_threadDone = true;
 			return;
 		}
 
@@ -318,7 +285,7 @@ protected:
 			
 		}
 		///// BELOW MUST BE THREAD-SAFE CODE ///////
-		_threadDone	= true;
+		//_threadDone	= true;
 
 		outImg = cv_drawMatches(cv_leftImg, cv_rightImg, _matches, _inlierIdx);
 		_seq_processed = l_info_msg->header.seq;
@@ -519,6 +486,8 @@ int main(int argc, char **argv)
 	cv::namedWindow(cv_window_name, cv::WINDOW_AUTOSIZE);
 
 	ros::init(argc, argv, "stereo_odometer");
+
+	ros::NodeHandle local_nh("~");
 	//   if (ros::names::remap("stereo") == "stereo") {
 	//     ROS_WARN("'stereo' has not been remapped! Example command-line usage:\n"
 	//              "\t$ rosrun viso2_ros stereo_odometer stereo:=narrow_stereo image:=image_rect");
@@ -530,7 +499,11 @@ int main(int argc, char **argv)
 	// }
 
 	std::string transport = argc > 1 ? argv[1] : "raw";
-	viso2_ros::StereoOdometer odometer(transport);
+
+	int queue_size;
+	local_nh.param("queue_size", queue_size, 1);
+
+	viso2_ros::StereoOdometer odometer(transport,queue_size);
 
 	int seq_showed = 0;
 	while (ros::ok())

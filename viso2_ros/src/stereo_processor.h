@@ -33,15 +33,10 @@ private:
 	image_transport::SubscriberFilter left_sub_, right_sub_;
 	message_filters::Subscriber<sensor_msgs::CameraInfo> left_info_sub_, right_info_sub_;
 	typedef message_filters::sync_policies::ExactTime<sensor_msgs::Image, sensor_msgs::Image, sensor_msgs::CameraInfo, sensor_msgs::CameraInfo> ExactPolicy;
-	typedef message_filters::sync_policies::ApproximateTime<sensor_msgs::Image, sensor_msgs::Image, sensor_msgs::CameraInfo, sensor_msgs::CameraInfo> ApproximatePolicy;
 	typedef message_filters::Synchronizer<ExactPolicy> ExactSync;
-	typedef message_filters::Synchronizer<ApproximatePolicy> ApproximateSync;
-	boost::shared_ptr<ExactSync> exact_sync_;
-	boost::shared_ptr<ApproximateSync> approximate_sync_;
-	int queue_size_;
+	ExactSync exact_sync_;
 
-	std::thread _thread;
-	
+	int queue_size_;
 
 	// for sync checking
 	ros::WallTimer check_synced_timer_;
@@ -58,34 +53,11 @@ private:
 							const sensor_msgs::ImageConstPtr& r_image_msg,
 							const sensor_msgs::CameraInfoConstPtr& l_info_msg,
 							const sensor_msgs::CameraInfoConstPtr& r_info_msg)
-	{
-		// For sync error checking
-		
+	{	
 		int _seq = l_image_msg->header.seq;
-		all_received_ = _seq;
+		all_received_++;
 
-		//std::cout << "dataCb frame: " << _seq << std::endl;
-
-
-		// if ( _threadDone == true )
-		// {
-		// 	//if (_thread.joinable())	_thread.detach();
-
-		// }else
-		// {
-		// 	std::cout << "abort frame: " << _seq << std::endl;
-		// 	return;
-		// }
-			
-
-		// std::cout << "start thread "  " with frame " << _seq << std::endl;
-
-		// _threadDone = false;
-		// _thread = std::thread(&StereoProcessor::imageCallback, this, l_image_msg, r_image_msg, l_info_msg, r_info_msg);
-		// _thread.detach();
-		// call implementation
 		imageCallback(l_image_msg, r_image_msg, l_info_msg, r_info_msg);
-		// cout << endl << "dataCb=" << all_received_ << "ends." << endl;
 	}
 
 	void checkInputsSynchronized()
@@ -124,8 +96,9 @@ protected:
 	 * callbacks.
 	 * \param transport The image transport to use
 	 */
-	StereoProcessor(const std::string& transport) :
-		left_received_(0), right_received_(0), left_info_received_(0), right_info_received_(0), all_received_(0), _threadDone(true)
+	StereoProcessor(const std::string& transport, int queue_size) : queue_size_(queue_size),
+		left_received_(0), right_received_(0), left_info_received_(0), right_info_received_(0), all_received_(0), 
+			exact_sync_(ExactPolicy(queue_size), left_sub_, right_sub_, left_info_sub_, right_info_sub_)
 	{
 		// Read local parameters
 		ros::NodeHandle local_nh("~");
@@ -158,22 +131,10 @@ protected:
 		left_info_sub_.registerCallback(boost::bind(StereoProcessor::increment, &left_info_received_));
 		right_info_sub_.registerCallback(boost::bind(StereoProcessor::increment, &right_info_received_));
 		check_synced_timer_ = nh.createWallTimer(ros::WallDuration(15.0),
-																						 boost::bind(&StereoProcessor::checkInputsSynchronized, this));
+				boost::bind(&StereoProcessor::checkInputsSynchronized, this));
 
-		// Synchronize input topics. Optionally do approximate synchronization.
-		local_nh.param("queue_size", queue_size_, 1);
-		bool approx;
-		local_nh.param("approximate_sync", approx, false);
-		if (approx)
-		{
-			approximate_sync_.reset(new ApproximateSync(ApproximatePolicy(queue_size_), left_sub_, right_sub_, left_info_sub_, right_info_sub_) );
-			approximate_sync_->registerCallback(boost::bind(&StereoProcessor::dataCb, this, _1, _2, _3, _4));
-		}
-		else
-		{
-			exact_sync_.reset(new ExactSync(ExactPolicy(queue_size_), left_sub_, right_sub_, left_info_sub_, right_info_sub_) );
-			exact_sync_->registerCallback(boost::bind(&StereoProcessor::dataCb, this, _1, _2, _3, _4));
-		}
+		// Synchronize input topics.
+		exact_sync_.registerCallback(boost::bind(&StereoProcessor::dataCb, this, _1, _2, _3, _4));
 	}
 
 	/**
@@ -184,7 +145,6 @@ protected:
 		const sensor_msgs::CameraInfoConstPtr l_info_msg,
 		const sensor_msgs::CameraInfoConstPtr r_info_msg) = 0;
 
-	std::atomic<bool> _threadDone;
 };
 
 } // end of namespace

@@ -563,17 +563,20 @@ int main(int argc, char **argv)
 	viso2_ros::StereoOdometer odometer(transport,queue_size);
 
 	int seq_showed = 0;
-	while (ros::ok())
-	{
-		if ( _visualisation_on && seq_showed != odometer.get_seq_processed() )
+
+	if (_visualisation_on)
+		while (ros::ok())
 		{
-			cv::imshow(cv_window_name, odometer.get_outImg());
-			cvWaitKey(1);
-			seq_showed = odometer.get_seq_processed();
+			if ( seq_showed != odometer.get_seq_processed() )
+			{
+				cv::imshow(cv_window_name, odometer.get_outImg());
+				cvWaitKey(1);
+				seq_showed = odometer.get_seq_processed();
+			}
+			ros::spinOnce();
 		}
-		ros::spinOnce();
-	}
-	
+	else
+		ros::spin();
 	
 	return 0;
 }

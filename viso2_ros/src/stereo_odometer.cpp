@@ -316,8 +316,8 @@ protected:
 
 			
 
-			double low_match =  std::exp (min ( std::pow(200.0 / (double)num_matches,1.2), 1.0));
-			double low_inlier = std::pow(min ( (double)num_inliers / (double)num_matches , 1.0), -16.0);
+			double low_match =  std::exp (min ( std::pow(100.0 / (double)num_matches,2), 1.0));
+			double low_inlier = std::pow(min ( (double)num_inliers / (double)num_matches , 1.0), -10.0);
 			assert (low_inlier>=1.0);
 			double factor = low_match * low_inlier;
 

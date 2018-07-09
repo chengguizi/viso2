@@ -260,7 +260,7 @@ protected:
 
 		
 
-		if ( do_publish_for_ekf && isEKFEnabled )
+		if ( do_publish_for_ekf )
 		{
 			tf2::Transform world_transform = world_to_base * base_to_sensor * delta_transform * base_to_sensor.inverse();
 			if (!_change_delta_pose_to_velocity)

@@ -32,6 +32,7 @@
 		<param name="noise_rotation" type="double" value="1.0e-5" /> 
 
 		<param name="change_delta_pose_to_velocity" type="bool" value="true" /> 
+		<param name="visualisation_on" type="bool" value="false" /> 
 	</node>
 
 </launch>

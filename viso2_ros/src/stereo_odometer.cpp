@@ -538,7 +538,7 @@ void HistogramContrastBoost(cv::Mat src, double& a, double& b) // returning Open
 int main(int argc, char **argv)
 {
 	std::string cv_window_name = "stereo_odometer";
-	cv::namedWindow(cv_window_name, cv::WINDOW_AUTOSIZE);
+	// cv::namedWindow(cv_window_name, cv::WINDOW_AUTOSIZE);
 
 	ros::init(argc, argv, "stereo_odometer");
 
@@ -556,14 +556,16 @@ int main(int argc, char **argv)
 	std::string transport = argc > 1 ? argv[1] : "raw";
 
 	int queue_size;
+	bool _visualisation_on;
 	local_nh.param("queue_size", queue_size, 1);
+	local_nh.param("visualisation_on", _visualisation_on, false);
 
 	viso2_ros::StereoOdometer odometer(transport,queue_size);
 
 	int seq_showed = 0;
 	while (ros::ok())
 	{
-		if (seq_showed != odometer.get_seq_processed() )
+		if ( _visualisation_on && seq_showed != odometer.get_seq_processed() )
 		{
 			cv::imshow(cv_window_name, odometer.get_outImg());
 			cvWaitKey(1);

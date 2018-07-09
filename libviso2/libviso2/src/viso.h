@@ -58,6 +58,8 @@ public:
   
   // returns the number of successfully matched points, after bucketing
   int32_t getNumberOfMatches () { return p_matched.size(); }
+
+  double getPercentageFilledBin() {return matcher->getPercentageFilledBin(); }
   
   // returns the number of inliers: num_inliers <= num_matched
   int32_t getNumberOfInliers () { return inliers.size(); }

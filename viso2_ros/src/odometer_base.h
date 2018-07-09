@@ -61,9 +61,11 @@ private:
 	boost::array<double, 36> pose_covariance_;
 	boost::array<double, 36> twist_covariance_;
 
+	bool _change_delta_pose_to_velocity;
+
 public:
 
-	OdometerBase() : tf_listener_(tfBuffer), global_start_(0), isEKFEnabled(false)
+	OdometerBase() : tf_listener_(tfBuffer), global_start_(0), isEKFEnabled(true)
 	{
 	// Read local parameters
 	ros::NodeHandle local_nh("~");
@@ -72,6 +74,7 @@ public:
 	local_nh.param("base_link_frame_id", base_link_frame_id_, std::string("imu_frame"));
 	local_nh.param("sensor_frame_id", sensor_frame_id_, std::string("camera_frame"));
 	local_nh.param("publish_tf", publish_tf_, true);
+	local_nh.param("change_delta_pose_to_velocity", _change_delta_pose_to_velocity, false);
 
 	ROS_INFO_STREAM("Basic Odometer Settings:" << std::endl <<
 			"  odom_frame_id      = " << odom_frame_id_ << std::endl <<
@@ -178,9 +181,10 @@ protected:
 
 		// calculate twist (not possible for first run as no delta_t can be computed)
 		tf2::Transform delta_base_transform = delta_transform ;
+		double delta_t = (time_curr - time_pre).toSec();
 		if (!time_pre.isZero())
 		{
-			double delta_t = (time_curr - time_pre).toSec();
+			
 			if (delta_t)
 			{
 			odometry_msg.twist.twist.linear.x = delta_base_transform.getOrigin().getX() / delta_t;
@@ -235,10 +239,10 @@ protected:
 		}
 
 		tf2::Stamped<tf2::Transform> world_to_base;
-		
+		geometry_msgs::TransformStamped world_to_base_msg;
 		try
 		{
-			geometry_msgs::TransformStamped world_to_base_msg = tfBuffer.lookupTransform(
+			world_to_base_msg = tfBuffer.lookupTransform(
 				"world_frame", // target_frame
 				base_link_frame_id_, // source_frame
 				time_pre); // target to source
@@ -258,20 +262,45 @@ protected:
 
 		if ( do_publish_for_ekf && isEKFEnabled )
 		{
+			tf2::Transform world_transform = world_to_base * base_to_sensor * delta_transform * base_to_sensor.inverse();
+			if (!_change_delta_pose_to_velocity)
+			{
+				//ROS_INFO_STREAM( "world_to_base: " << world_to_base_msg);
+				// read from left to right, base_to_sensor.inverse() assume slow changing calibration
+				 // * base_to_sensor.inverse()
+				geometry_msgs::PoseWithCovarianceStamped pose_iw_msg;
+				pose_iw_msg.header.stamp = time_curr;
+				pose_iw_msg.header.frame_id = "world_frame";
+				pose_iw_msg.pose.covariance = twist_covariance_;
 
-			// read from left to right, base_to_sensor.inverse() assume slow changing calibration
-			tf2::Transform world_transform = world_to_base * base_to_sensor * delta_transform * base_to_sensor.inverse(); // * base_to_sensor.inverse()
-			geometry_msgs::PoseWithCovarianceStamped pose_iw_msg;
-			pose_iw_msg.header.stamp = time_curr;
-			pose_iw_msg.header.frame_id = "world_frame";
-			pose_iw_msg.pose.covariance = twist_covariance_;
+				// std::cout << "origin:" <<  world_transform.getOrigin()  << std::endl;
+				// std::cout << "rotation:" <<  world_transform.getRotation()  << std::endl;
+				tf2::toMsg(world_transform, pose_iw_msg.pose.pose);	
+				pose_iw_pub_.publish(pose_iw_msg);
 
-			// std::cout << "origin:" <<  world_transform.getOrigin()  << std::endl;
-			// std::cout << "rotation:" <<  world_transform.getRotation()  << std::endl;
-			tf2::toMsg(world_transform, pose_iw_msg.pose.pose);	
-			pose_iw_pub_.publish(pose_iw_msg);
+				ROS_INFO_STREAM("[DELTA POSE] EKF Measurement Published! cov:" << twist_covariance_[0]) ;
+			}else if (delta_t > 0.0)
+			{
+				geometry_msgs::PoseWithCovarianceStamped pose_i_msg;
+				tf2::toMsg(world_transform, pose_i_msg.pose.pose); // we only preserve the rotation part of the pose
 
-			ROS_INFO_STREAM("EKF Measurement Published!");
+				tf2::Transform imu_transform = base_to_sensor * delta_transform * base_to_sensor.inverse();
+				tf2::Transform imu_t1_to_t2;
+				imu_t1_to_t2.setIdentity();
+				imu_t1_to_t2.setRotation(imu_transform.getRotation());
+
+				imu_transform = imu_t1_to_t2.inverse() * imu_transform;
+				pose_i_msg.pose.pose.position.x = imu_transform.getOrigin().getX() / delta_t;
+				pose_i_msg.pose.pose.position.y = imu_transform.getOrigin().getY() / delta_t;
+				pose_i_msg.pose.pose.position.z = imu_transform.getOrigin().getZ() / delta_t;
+				pose_i_msg.header.stamp = time_curr;//time_pre + (time_curr - time_pre)*0.5;
+				pose_i_msg.header.frame_id = "imu_frame";
+				pose_i_msg.pose.covariance = twist_covariance_;
+
+				pose_iw_pub_.publish(pose_i_msg);
+				ROS_INFO_STREAM("[VELOCITY] EKF Measurement Published! cov:" << twist_covariance_[0]);
+			}
+			
 		}
 
 		// tf_broadcaster_.sendTransform(tf::StampedTransform(base_transform, time_curr,

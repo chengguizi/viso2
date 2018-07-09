@@ -36,7 +36,7 @@ bool VisualOdometry::updateMotion()
 	// on failure
 	if (_tr_delta.size() != 6)
 	{
-		//cerr << "ERROR updateMotion(): _tr_delta.size()=" << _tr_delta.size()<< endl;
+		cerr << "ERROR updateMotion(): _tr_delta.size()=" << _tr_delta.size()<< endl;
 		return false;
 	}
 

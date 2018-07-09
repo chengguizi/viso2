@@ -39,7 +39,11 @@ generate_messages(
 )
 
 ### NO.7 Specify package build info export
-catkin_package()
+catkin_package(
+  CATKIN_DEPENDS libviso2
+)
+
+#include_directories(include ${catkin_INCLUDE_DIRS})
 
 ### NO.8 libraries / excutables
 

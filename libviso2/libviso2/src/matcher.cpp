@@ -730,6 +730,7 @@ void Matcher::matching(int32_t *m1p, int32_t *m2p, int32_t *m1c, int32_t *m2c,
 
 
 	_rematched = 0;
+	percentage_filled_bin = 0.0;
 
 
 	// for all points do
@@ -808,6 +809,18 @@ void Matcher::matching(int32_t *m1p, int32_t *m2p, int32_t *m1c, int32_t *m2c,
 		}
 
 	}
+
+	int num_bin_filled = 0;
+
+	for (auto bin : matched_bin)
+	{
+		if (bin > 0)
+			num_bin_filled++;
+	}
+
+	assert (num_bin_filled <= bin_num);
+
+	percentage_filled_bin = num_bin_filled / (double)bin_num;
 
 	// free memory
 	free(M);

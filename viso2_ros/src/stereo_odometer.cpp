@@ -17,6 +17,7 @@
 #include <opencv2/opencv.hpp>
 
 #include <iostream>
+#include <cassert>
 
 namespace viso2_ros
 {
@@ -29,6 +30,8 @@ cv::Mat cv_drawMatches( cv::Mat cv_leftImg,
 			cv::Mat cv_rightImg, std::vector<Matcher::p_match> _matches, std::vector<int> _inlierIdx);
 
 cv::Mat correctGamma( cv::Mat& img, double gamma );
+
+void HistogramContrastBoost(cv::Mat src, double& a, double& b);
 
 // some arbitrary values (0.1m^2 linear cov. 10deg^2. angular cov.)
 
@@ -167,28 +170,30 @@ protected:
 		ROS_ASSERT(l_image_msg->height == r_image_msg->height);
 
 		int dims[] = {(int)l_image_msg->width, (int)l_image_msg->height, l_step};
-
-		// ROS_INFO_STREAM("Receiving: image step =" << dims[2] << ", width= " << dims[0] << ", height= " << dims[1]);
-
 		cv::Mat cv_leftImg_source(cv::Size(dims[0], dims[1]), CV_8UC1, (void *)l_image_data, cv::Mat::AUTO_STEP);
 		cv::Mat cv_rightImg_source(cv::Size(dims[0], dims[1]), CV_8UC1, (void *)r_image_data, cv::Mat::AUTO_STEP);
 
+		// Gamma Correction
 		// cv_leftImg = correctGamma(cv_leftImg,1.2);
 		// cv_rightImg = correctGamma(cv_rightImg,1.2);
 
-		double b = 128 * (1 - contrast_) + brightness_;
-		cv_leftImg_source.convertTo(cv_leftImg_source,-1,contrast_,b);
-		cv_rightImg_source.convertTo(cv_rightImg_source,-1,contrast_,b);
-
 		cv::Mat cv_leftImg;
 		cv::Mat cv_rightImg;
-		
+
+		// Scaling down
 		cv::resize(cv_leftImg_source,cv_leftImg,cv::Size(),scaling_,scaling_);
 		cv::resize(cv_rightImg_source,cv_rightImg,cv::Size(),scaling_,scaling_);
 
 		dims[0] = cv_leftImg.cols;
 		dims[1] = cv_leftImg.rows;
 		dims[2] = cv_leftImg.cols;
+
+		// Perform Histogram Removal
+		double a,b;
+		HistogramContrastBoost(cv_leftImg,a,b);
+		// Contrast Boost
+		cv_leftImg.convertTo(cv_leftImg,-1,a,b);
+		cv_rightImg.convertTo(cv_rightImg,-1,a,b);
 
 
 		static std_msgs::Header pre_header;
@@ -222,6 +227,8 @@ protected:
 		bool success = visual_odometer_->process(
 			cv_leftImg.data, cv_rightImg.data, dims, change_reference_frame_); 
 
+		
+
 		// visualisation code
 		auto _matches = visual_odometer_->getMatches();
 		auto _inlierIdx = visual_odometer_->getInlierIndices();
@@ -229,6 +236,18 @@ protected:
 
 		auto num_matches = visual_odometer_->getNumberOfMatches();
 		auto num_inliers = visual_odometer_->getNumberOfInliers();
+
+		if (num_inliers < ref_frame_inlier_threshold_)
+			success = false;
+		else if (visual_odometer_->getPercentageFilledBin() < 0.1)
+		{
+			ROS_WARN_STREAM("reject odometer result due to low coverage of matched points < 10%: " << visual_odometer_->getPercentageFilledBin() );
+			success = false;
+		}else if (num_inliers/(double)num_matches < 0.4)
+		{
+			ROS_WARN_STREAM("low inlier percent: " << num_inliers/(double)num_matches );
+			success = false;
+		}
 		//ROS_INFO_STREAM( "Matches: " << num_matches << ", Inliers: " << 100.0*num_inliers/num_matches << " %" );
 
 		// regardless of success or not calculate the transform
@@ -257,7 +276,8 @@ protected:
 		tf2::Transform delta_transform(rot_mat, t);
 
 		change_reference_frame_ = false; // default
-		if(success && num_inliers > ref_frame_inlier_threshold_)
+
+		if(success)
 		{
 
 			// Proceed depending on the reference frame change method
@@ -296,12 +316,13 @@ protected:
 
 			
 
-			double confidence_match =  pow (min (num_matches / 60.0, 1.0),4.0);
-			double confidence_inlier = pow (min ((double)num_inliers / (double)num_matches / 0.6 , 1.0), 4.0);
-			double factor = 1.0 / (confidence_match * confidence_inlier) ;
+			double low_match =  std::exp (min ( std::pow(200.0 / (double)num_matches,1.2), 1.0));
+			double low_inlier = std::pow(min ( (double)num_inliers / (double)num_matches , 1.0), -16.0);
+			assert (low_inlier>=1.0);
+			double factor = low_match * low_inlier;
 
-			setPoseCovariance(std_tCov_*factor, std_rCov_*factor);
-			setTwistCovariance(std_tCov_*factor, std_rCov_*factor);
+			setPoseCovariance(std_tCov_*std_tCov_*factor*factor, std_rCov_*std_rCov_*factor*factor);
+			setTwistCovariance(std_tCov_*std_tCov_*factor*factor, std_rCov_*std_rCov_*factor*factor);
 
 			integrateAndPublish(delta_transform, l_image_msg->header.stamp, pre_header.stamp);
 
@@ -313,11 +334,11 @@ protected:
 		}
 		else
 		{
-			setPoseCovariance(9999,9999);
-			setTwistCovariance(9999,9999);
+			setPoseCovariance(999999,999999);
+			setTwistCovariance(999999,999999);
 			//tf::Transform delta_transform;
-			//delta_transform.setIdentity();
-			//integrateAndPublish(delta_transform, l_image_msg->header.stamp, pre_header.stamp);
+			delta_transform.setIdentity();
+			integrateAndPublish(delta_transform, l_image_msg->header.stamp, pre_header.stamp);
 
 			ROS_WARN("Visual Odometer got lost!");
 			got_lost_ = true;
@@ -475,6 +496,40 @@ cv::Mat correctGamma( cv::Mat& img, double gamma ) {
  LUT( img, lut_matrix, result );
  
  return result;
+}
+
+void HistogramContrastBoost(cv::Mat src, double& a, double& b) // returning OpenCV convert to coefficient
+{
+	const int histSize = 256;
+	cv::Mat hist;
+	cv::calcHist(&src,1 /*num of images*/, 0 /*channels*/, cv::Mat() /*mask*/, 
+	hist, 1 /*output dimensions*/,  &histSize/* histogram size*/, 0 /*ranges*/ );
+	normalize(hist, hist,1,0,cv::NORM_L1); // normalised histogram
+
+	float dark_percent=0, bright_percent=0;
+	int dark_cutoff, bright_cutoff;
+	const float threshold_dark = 0.01, threshold_bright = 0.04;
+	const int deadzone = 1;
+
+	for (dark_cutoff = 0 + deadzone ; dark_percent < threshold_dark; dark_cutoff++)
+	{
+		dark_percent += hist.at<float>(dark_cutoff);
+	}
+
+	for (bright_cutoff = histSize - 1 - deadzone ; bright_percent < threshold_bright; bright_cutoff--)
+	{
+		bright_percent += hist.at<float>(bright_cutoff);
+	}
+
+	//std::cout << "dark_cutoff: " << dark_cutoff << ", bright_cutoff: "<< bright_cutoff << std::endl;
+
+	assert (bright_cutoff > dark_cutoff);
+
+	double mid = (dark_cutoff + bright_cutoff) / 2.0;
+
+	a = (double)histSize / (double)(bright_cutoff - dark_cutoff + 1);
+	b = - dark_cutoff*a;
+
 }
 
 } // end of namespace

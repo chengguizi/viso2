@@ -2,6 +2,7 @@
 #include <iostream>
 
 #include <chrono>
+#include <cassert>
 
 using namespace std;
 
@@ -43,6 +44,8 @@ bool VisualOdometryStereo::process(uint8_t *I1, uint8_t *I2, int32_t* dims, bool
 	auto num_matches = getNumberOfMatches();
 	auto num_inliers = getNumberOfInliers();
 
+	assert(num_matches >= num_inliers );
+
 	printf("process time: %.2lf, matches: %4d (%4d rematched), inliers: %.1lf%%\n",runtime.count(),num_matches,matcher->getNumRematches(),100.0*num_inliers/num_matches);
 	//cout << "process time: " << runtime.count();
 	//cout << ", Matches: " << num_matches << "(" << matcher->getNumRematches() <<" rematches), Inliers: " << 100.0*num_inliers/num_matches << " %" << endl;
@@ -78,6 +81,9 @@ vector<double> VisualOdometryStereo::estimateMotion(vector<Matcher::p_match> p_m
 
 	// get number of matches
 	int32_t N = p_matched.size();
+	// clear parameter vector
+	inliers.clear();
+
 	if (N < 6)
 		return vector<double>();
 
@@ -117,8 +123,7 @@ vector<double> VisualOdometryStereo::estimateMotion(vector<Matcher::p_match> p_m
 	vector<double> tr_delta_curr;			// yx: ransac: maybemodel (for current sample)
 	tr_delta_curr.resize(6);
 
-	// clear parameter vector
-	inliers.clear();
+	
 
 	// yx: for model based ransac
 	double Pbest = 0.0;

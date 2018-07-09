@@ -152,6 +152,8 @@ public:
 		right_curr = n2c2;
 	}
 
+	double getPercentageFilledBin(){return percentage_filled_bin;}
+
 	// make it public
 	parameters param;
 
@@ -272,6 +274,8 @@ private:
 	std::vector<Matcher::range>   ranges;
 
 	int _rematched;
+
+	double percentage_filled_bin;
 };
 
 #endif

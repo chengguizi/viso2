@@ -181,8 +181,17 @@ protected:
 		cv::Mat cv_rightImg;
 
 		// Scaling down
-		cv::resize(cv_leftImg_source,cv_leftImg,cv::Size(),scaling_,scaling_);
-		cv::resize(cv_rightImg_source,cv_rightImg,cv::Size(),scaling_,scaling_);
+
+		if (scaling_ != 1)
+		{
+			cv::resize(cv_leftImg_source,cv_leftImg,cv::Size(),scaling_,scaling_);
+			cv::resize(cv_rightImg_source,cv_rightImg,cv::Size(),scaling_,scaling_);
+		}
+		else{
+			cv_leftImg = cv_leftImg_source;
+			cv_rightImg = cv_rightImg_source;
+		}
+		
 
 		dims[0] = cv_leftImg.cols;
 		dims[1] = cv_leftImg.rows;
@@ -574,7 +583,7 @@ int main(int argc, char **argv)
 				seq_showed = odometer.get_seq_processed();
 			}
 			ros::spinOnce();
-			ros::Duration(0.1).sleep();
+			ros::Duration(0.001).sleep();
 		}
 	else
 		ros::spin();

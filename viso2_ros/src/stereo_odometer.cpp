@@ -246,9 +246,7 @@ protected:
 		auto num_matches = visual_odometer_->getNumberOfMatches();
 		auto num_inliers = visual_odometer_->getNumberOfInliers();
 
-		if (num_inliers < ref_frame_inlier_threshold_)
-			success = false;
-		else if (visual_odometer_->getPercentageFilledBin() < 0.1)
+		if (visual_odometer_->getPercentageFilledBin() < 0.1)
 		{
 			ROS_WARN_STREAM("reject odometer result due to low coverage of matched points < 10%: " << visual_odometer_->getPercentageFilledBin() );
 			success = false;
@@ -325,8 +323,8 @@ protected:
 
 			
 
-			double low_match =  std::exp (min ( std::pow(100.0 / (double)num_matches,2), 1.0));
-			double low_inlier = std::pow(min ( (double)num_inliers / (double)num_matches , 1.0), -10.0);
+			double low_match =  std::exp (min ( std::pow(100.0 / (double)num_matches,2), 2.0));
+			double low_inlier = std::pow(min ( (double)num_inliers / (double)num_matches , 1.0), -7.0);
 			assert (low_inlier>=1.0);
 			double factor = low_match * low_inlier;
 

@@ -10,7 +10,7 @@
 		<param name="left_camerainfo" type="str" value="/stereo/left/camera_info" />
 		<param name="right_camerainfo" type="str" value="/stereo/right/camera_info" />
 
-		<param name="moving_object_polygons" type="str" value="/ai/moving_object_polygons" />
+		<param name="moving_object_polygons" type="str" value="/arena_movidius/objects" />
 
 		<param name="max_features" type="int" value="5" />   
 		<param name="bucket_ornot" type="bool" value="true" />   

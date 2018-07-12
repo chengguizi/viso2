@@ -506,7 +506,7 @@ protected:
 
 		for (int idx = 0; idx < points.size(); idx+=2)
 		{
-			Matcher::Rectangle rect(points[idx].x, points[idx].y, points[idx+1].x, points[idx+1].y);
+			Matcher::Rectangle rect(points[idx].x*scaling_, points[idx].y*scaling_, points[idx+1].x*scaling_, points[idx+1].y*scaling_);
 			results.push_back(rect);
 		}
 
@@ -569,7 +569,7 @@ cv::Mat cv_drawMatches(cv::Mat cv_leftImg, cv::Mat cv_rightImg, std::vector<Matc
 
 	for (auto rect : rects)
 	{
-		cv::rectangle(outImg, cv::Point(rect._x1, rect._y1), cv::Point(rect._x2, rect._y2), cv::Scalar(255,0,0));
+		cv::rectangle(outImg, cv::Point(rect._x1, outImg.rows - rect._y1), cv::Point(rect._x2, outImg.rows - rect._y2), cv::Scalar(255,0,0));
 	}
 	//cv::Mat outImg(480, 640, CV_8UC3, cv::Scalar(255,0,255));
 

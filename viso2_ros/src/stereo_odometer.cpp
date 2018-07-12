@@ -32,7 +32,7 @@ namespace viso2_ros
 
 
 cv::Mat cv_drawMatches( cv::Mat cv_leftImg, 
-			cv::Mat cv_rightImg, std::vector<Matcher::p_match> _matches, std::vector<int> _inlierIdx, std::vector<Matcher::Rectangle> rects);
+			cv::Mat cv_rightImg, std::vector<Matcher::p_match> _matches, std::vector<int> _inlierIdx, bool drawPrevious = false);
 
 cv::Mat correctGamma( cv::Mat& img, double gamma );
 
@@ -71,6 +71,7 @@ private:
 
 	int _seq_processed;
 	cv::Mat outImg;
+	cv::Mat rectImg;
 
 	bool _visualisation_on;
 
@@ -126,6 +127,11 @@ public:
 		return outImg;
 	}
 
+	cv::Mat get_rectImg()
+	{
+		return rectImg;
+	}
+
 protected:
 
 	void initOdometer(
@@ -171,6 +177,9 @@ protected:
 
 		std::cout << "imageCallback(): frame at " << l_image_msg->header.stamp << std::endl;
 
+		static cv::Mat cv_leftImg_prev;
+		static cv::Mat cv_rightImg_prev;
+
 		bool first_run = false;
 		// create odometer if not exists
 		if (!visual_odometer_)
@@ -209,15 +218,8 @@ protected:
 
 		// Scaling down
 
-		if (scaling_ != 1)
-		{
-			cv::resize(cv_leftImg_source,cv_leftImg,cv::Size(),scaling_,scaling_);
-			cv::resize(cv_rightImg_source,cv_rightImg,cv::Size(),scaling_,scaling_);
-		}
-		else{
-			cv_leftImg = cv_leftImg_source;
-			cv_rightImg = cv_rightImg_source;
-		}
+		cv::resize(cv_leftImg_source,cv_leftImg,cv::Size(),scaling_,scaling_);
+		cv::resize(cv_rightImg_source,cv_rightImg,cv::Size(),scaling_,scaling_);
 		
 
 		dims[0] = cv_leftImg.cols;
@@ -239,6 +241,8 @@ protected:
 			got_lost_ = false;
 
 			pre_header = l_info_msg->header;
+			cv_leftImg_prev = cv_leftImg;
+			cv_rightImg_prev = cv_rightImg;
 			// on first run publish zero once
 			//tf::Transform delta_transform;
 			//delta_transform.setIdentity();
@@ -361,7 +365,18 @@ protected:
 		//_threadDone	= true;
 
 		if (_visualisation_on)
-			outImg = cv_drawMatches(cv_leftImg, cv_rightImg, _matches, _inlierIdx, rectangles);
+		{
+			outImg = cv_drawMatches(cv_leftImg, cv_rightImg, _matches, _inlierIdx);
+
+			rectImg = cv_leftImg.clone();
+
+			for (auto rect : rectangles)
+			{
+				cv::rectangle(rectImg, cv::Point(rect._x1, rectImg.rows - rect._y1), cv::Point(rect._x2, rectImg.rows - rect._y2), cv::Scalar(200,0,0), CV_FILLED);
+			}
+			
+		}
+			
 
 		_seq_processed = l_info_msg->header.seq;
 
@@ -417,6 +432,13 @@ protected:
 		//std::cout << "processed Frame: " << _seq_processed << std::endl;
 
 		pre_header = l_info_msg->header;
+
+		if (!change_reference_frame_)
+		{
+			cv_leftImg_prev = cv_leftImg;
+			cv_rightImg_prev = cv_rightImg;
+		}
+		
 	}
 
 	double computeFeatureFlow(
@@ -514,7 +536,7 @@ protected:
 	}
 };
 
-cv::Mat cv_drawMatches(cv::Mat cv_leftImg, cv::Mat cv_rightImg, std::vector<Matcher::p_match> _matches, std::vector<int> _inlierIdx, std::vector<Matcher::Rectangle> rects)
+cv::Mat cv_drawMatches(cv::Mat cv_leftImg, cv::Mat cv_rightImg, std::vector<Matcher::p_match> _matches, std::vector<int> _inlierIdx , bool drawPrevious)
 {
 	int num_matches = _matches.size();
 	int num_inliers = _inlierIdx.size();
@@ -565,12 +587,12 @@ cv::Mat cv_drawMatches(cv::Mat cv_leftImg, cv::Mat cv_rightImg, std::vector<Matc
 	}
 
 	cv::Mat outImg;
-	cv::drawMatches(cv_leftImg, match_curr_left, cv_rightImg, match_curr_right, matches1to2, outImg, cv::Scalar(0,255,0), cv::Scalar(255,0,0),mask_inlier);
+	if (!drawPrevious)
+		cv::drawMatches(cv_leftImg, match_curr_left, cv_rightImg, match_curr_right, matches1to2, outImg, cv::Scalar(0,255,0), cv::Scalar(255,0,0),mask_inlier);
+	else
+		cv::drawMatches(cv_leftImg, match_pre_left, cv_rightImg, match_pre_right, matches1to2, outImg, cv::Scalar(0,255,0), cv::Scalar(255,0,0),mask_inlier);
 
-	for (auto rect : rects)
-	{
-		cv::rectangle(outImg, cv::Point(rect._x1, outImg.rows - rect._y1), cv::Point(rect._x2, outImg.rows - rect._y2), cv::Scalar(255,0,0));
-	}
+	
 	//cv::Mat outImg(480, 640, CV_8UC3, cv::Scalar(255,0,255));
 
 	return outImg;
@@ -632,7 +654,6 @@ void HistogramContrastBoost(cv::Mat src, double& a, double& b) // returning Open
 
 int main(int argc, char **argv)
 {
-	std::string cv_window_name = "stereo_odometer";
 	// cv::namedWindow(cv_window_name, cv::WINDOW_AUTOSIZE);
 
 	ros::init(argc, argv, "stereo_odometer");
@@ -664,7 +685,8 @@ int main(int argc, char **argv)
 		{
 			if ( seq_showed != odometer.get_seq_processed() )
 			{
-				cv::imshow(cv_window_name, odometer.get_outImg());
+				cv::imshow("Current Frame", odometer.get_outImg());
+				cv::imshow("Previous Frame", odometer.get_rectImg());
 				cvWaitKey(1);
 				seq_showed = odometer.get_seq_processed();
 			}

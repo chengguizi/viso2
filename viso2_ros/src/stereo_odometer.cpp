@@ -368,7 +368,7 @@ protected:
 		{
 			outImg = cv_drawMatches(cv_leftImg, cv_rightImg, _matches, _inlierIdx);
 
-			rectImg = cv_leftImg.clone();
+			rectImg = cv_leftImg_prev.clone();
 
 			for (auto rect : rectangles)
 			{

@@ -168,6 +168,9 @@ protected:
 			const sensor_msgs::CameraInfoConstPtr r_info_msg)
 	{
 		ros::WallTime start_time = ros::WallTime::now();
+
+		std::cout << "imageCallback(): frame at " << l_image_msg->header.stamp << std::endl;
+
 		bool first_run = false;
 		// create odometer if not exists
 		if (!visual_odometer_)
@@ -270,7 +273,7 @@ protected:
 		std::vector<Matcher::Rectangle> rectangles = obtainMovingObjectPolygons(stamp);
 
 		
-		ROS_INFO_STREAM("Polygon received: (" << rectangles.size() << "), oldest: " << cache_polygon_.getOldestTime() 
+		ROS_INFO_STREAM( ros::Time(stamp) << " - Polygon received: (" << rectangles.size() << "), oldest: " << cache_polygon_.getOldestTime() 
 			<< ", latest: " << cache_polygon_.getLatestTime () << std::endl;
 		);
 

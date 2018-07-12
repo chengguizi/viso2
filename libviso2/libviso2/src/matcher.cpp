@@ -745,9 +745,23 @@ void Matcher::matching(int32_t *m1p, int32_t *m2p, int32_t *m1c, int32_t *m2c,
 	{
 
 		// coordinates
-		u1p = *(m1p + step_size*i1p + 0);
-		v1p = *(m1p + step_size*i1p + 1);
+		u1p = *(m1p + step_size*i1p + 0); // horizontal
+		v1p = *(m1p + step_size*i1p + 1); // vertical
 		int32_t c1p = *(m1p + step_size*i1p + 3); // test if this point is matched before
+
+		// check if the previous frame point is within the moving rectangle
+		bool is_moving = false;
+		for ( auto rect : moving_objects)
+		{
+			if (rect.contains(u1p,v1p))
+			{
+				is_moving = true;
+				break;
+			}
+		}
+
+		if (is_moving)
+			continue;
 
 		// compute row and column of statistics bin to which this observation belongs
 		int32_t u_bin = min((int32_t)floor((float)u1p / (float)param.match_binsize), u_bin_num - 1);
@@ -1195,20 +1209,7 @@ void Matcher::FastFeatures(uint8_t* I, const int32_t* dims, vector<Matcher::maxi
 	for (int32_t i = 0; i < f->numCornersNonmax; i++)
 	{
 		if (f->c[i].xCoords > 4 && f->c[i].xCoords < dims[0] - 4 && f->c[i].yCoords > 4 && f->c[i].yCoords < dims[1] - 4)
-		{
-			bool is_moving = false;
-			for ( auto rect : moving_objects)
-			{
-				if (rect.contains(f->c[i].xCoords,f->c[i].yCoords))
-				{
-					is_moving = true;
-					break;
-				}
-			}
-
-			if (is_moving)
-				continue;
-			
+		{			
 			maxima.push_back(Matcher::maximum((int32_t)(f->c[i].xCoords), (int32_t)(f->c[i].yCoords), (int32_t)(f->c[i].score), 0));
 			// cv::KeyPoint key;
 			// key.pt.x = f->c[i].xCoords;

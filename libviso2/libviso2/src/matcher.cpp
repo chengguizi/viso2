@@ -40,6 +40,8 @@ Matcher::Matcher(parameters param) : param(param)
 	I1c_du_full = 0; I1c_dv_full = 0;
 	I2c_du_full = 0; I2c_dv_full = 0;
 
+	time_i1 = 0.0; time_i2 = 0.0;
+
 	// margin needed to compute descriptor + sobel responses
 	margin = 5 + 1;
 
@@ -82,7 +84,7 @@ Matcher::~Matcher()
 
 }
 
-void Matcher::pushBack(uint8_t *I1, uint8_t* I2, int32_t* dims, const bool replace)
+void Matcher::pushBack(uint8_t *I1, uint8_t* I2, double frame_time, int32_t* dims, const bool replace)
 {
 	// image dimensions
 	int32_t width = dims[0];
@@ -144,9 +146,14 @@ void Matcher::pushBack(uint8_t *I1, uint8_t* I2, int32_t* dims, const bool repla
     dims_p[0]   = dims_c[0];
     dims_p[1]   = dims_c[1];
     dims_p[2]   = dims_c[2];
+
+	time_i1 = time_i2;
   }
 
+	time_i2 = frame_time;
 
+	//std::cout << "time_i1:" << time_i1 << ", " << "time_i2:" << time_i2 << std::endl;
+	 
 	// set new dims (bytes per line must be multiple of 16)
 	dims_c[0] = width;
 	dims_c[1] = height;
@@ -1189,6 +1196,19 @@ void Matcher::FastFeatures(uint8_t* I, const int32_t* dims, vector<Matcher::maxi
 	{
 		if (f->c[i].xCoords > 4 && f->c[i].xCoords < dims[0] - 4 && f->c[i].yCoords > 4 && f->c[i].yCoords < dims[1] - 4)
 		{
+			bool is_moving = false;
+			for ( auto rect : moving_objects)
+			{
+				if (rect.contains(f->c[i].xCoords,f->c[i].yCoords))
+				{
+					is_moving = true;
+					break;
+				}
+			}
+
+			if (is_moving)
+				continue;
+			
 			maxima.push_back(Matcher::maximum((int32_t)(f->c[i].xCoords), (int32_t)(f->c[i].yCoords), (int32_t)(f->c[i].score), 0));
 			// cv::KeyPoint key;
 			// key.pt.x = f->c[i].xCoords;

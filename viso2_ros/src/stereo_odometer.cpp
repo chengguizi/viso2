@@ -5,6 +5,11 @@
 #include <pcl_ros/point_cloud.h>
 #include <pcl/point_types.h>
 
+#include <message_filters/subscriber.h>
+#include <message_filters/cache.h>
+#include <geometry_msgs/PolygonStamped.h>
+#include <geometry_msgs/Point32.h>
+
 #include <viso_stereo.h>
 
 #include <viso2_ros/VisoInfo.h> // message file header
@@ -27,7 +32,7 @@ namespace viso2_ros
 
 
 cv::Mat cv_drawMatches( cv::Mat cv_leftImg, 
-			cv::Mat cv_rightImg, std::vector<Matcher::p_match> _matches, std::vector<int> _inlierIdx);
+			cv::Mat cv_rightImg, std::vector<Matcher::p_match> _matches, std::vector<int> _inlierIdx, std::vector<Matcher::Rectangle> rects);
 
 cv::Mat correctGamma( cv::Mat& img, double gamma );
 
@@ -67,13 +72,18 @@ private:
 	int _seq_processed;
 	cv::Mat outImg;
 
+	bool _visualisation_on;
+
+	message_filters::Subscriber<geometry_msgs::PolygonStamped> sub_polygon_;
+	message_filters::Cache<geometry_msgs::PolygonStamped> cache_polygon_;
+
 public:
 
 	typedef pcl::PointCloud<pcl::PointXYZRGB> PointCloud;
 
-	StereoOdometer(const std::string& transport, const int queue_size) : 
+	StereoOdometer(const std::string& transport, const int queue_size, bool visualisation_on) : 
 		StereoProcessor(transport, queue_size), OdometerBase(), 
-		got_lost_(false), change_reference_frame_(false), _seq_processed(0)
+		got_lost_(false), change_reference_frame_(false), _seq_processed(0), _visualisation_on(visualisation_on)
 	{
 		// Read local parameters
 		ros::NodeHandle local_nh("~");
@@ -89,10 +99,17 @@ public:
 		local_nh.param("noise_translation", std_tCov_, 0.005);
 		local_nh.param("noise_rotation", std_rCov_,  0.009);
 
+		std::string moving_object_topics;
+		local_nh.param<std::string>("moving_object_polygons", moving_object_topics, "/ai/moving_object_polygons");
+
 		//point_cloud_pub_ = local_nh.advertise<PointCloud>("point_cloud", 1);
 		info_pub_ = local_nh.advertise<VisoInfo>("info", 1);
 
 		reference_motion_ = Matrix::eye(6);
+
+		sub_polygon_.subscribe(local_nh, "POLYGON", 1);
+		cache_polygon_.setCacheSize(256);
+		cache_polygon_.connectInput(sub_polygon_);
 
 		ROS_INFO("StereoOdometer initialised! Waiting for images...");
 	}
@@ -208,13 +225,14 @@ protected:
 		static std_msgs::Header pre_header;
 		if (first_run) // || got_lost_
 		{
-			visual_odometer_->process(cv_leftImg.data, cv_rightImg.data, dims);
+			visual_odometer_->process(cv_leftImg.data, cv_rightImg.data, l_info_msg->header.stamp.toSec() , dims);
 			got_lost_ = false;
+
+			pre_header = l_info_msg->header;
 			// on first run publish zero once
 			//tf::Transform delta_transform;
 			//delta_transform.setIdentity();
 			//integrateAndPublish(delta_transform, l_image_msg->header.stamp, ros::Time(0));
-			pre_header = l_info_msg->header;
 			return;
 		}
 
@@ -233,8 +251,24 @@ protected:
 
 		// ACTUAL PROCESS()
 		// change_reference_frame_ == replace, whereby previous frame holds the same, only current frame changes
+
+		// the current buffer item gets poped out if change frame happens
+
+		double stamp;
+		if (change_reference_frame_)
+			stamp = visual_odometer_->getPreviousFrameTimestamp();
+		else
+			stamp = visual_odometer_->getCurrentFrameTimestamp();
+
+		std::vector<Matcher::Rectangle> rectangles = obtainMovingObjectPolygons(stamp);
+
+		
+		ROS_INFO_STREAM("Polygon received: (" << rectangles.size() << ")");
+
+		visual_odometer_->setPreviousFrameMovingObjects(rectangles);
+
 		bool success = visual_odometer_->process(
-			cv_leftImg.data, cv_rightImg.data, dims, change_reference_frame_); 
+			cv_leftImg.data, cv_rightImg.data, l_info_msg->header.stamp.toSec(), dims, change_reference_frame_);
 
 		
 
@@ -314,7 +348,9 @@ protected:
 		///// BELOW MUST BE THREAD-SAFE CODE ///////
 		//_threadDone	= true;
 
-		outImg = cv_drawMatches(cv_leftImg, cv_rightImg, _matches, _inlierIdx);
+		if (_visualisation_on)
+			outImg = cv_drawMatches(cv_leftImg, cv_rightImg, _matches, _inlierIdx, rectangles);
+
 		_seq_processed = l_info_msg->header.seq;
 
 		if (success)
@@ -323,8 +359,8 @@ protected:
 
 			
 
-			double low_match =  std::exp (min ( std::pow(100.0 / (double)num_matches,2), 2.0));
-			double low_inlier = std::pow(min ( (double)num_inliers / (double)num_matches , 1.0), -7.0);
+			double low_match =  std::exp (max ( 50.0 / (double)num_matches, 1.0));
+			double low_inlier = std::pow( min ( (double)num_inliers / (double)num_matches , 1.0), -6.0);
 			assert (low_inlier>=1.0);
 			double factor = low_match * low_inlier;
 
@@ -430,9 +466,43 @@ protected:
 			ROS_ERROR("cv_bridge exception: %s", e.what());
 		}
 	}
+
+	std::vector<Matcher::Rectangle> obtainMovingObjectPolygons(double timestamp)
+	{
+		std::vector<Matcher::Rectangle> results;
+
+		ros::Time rostime;
+		rostime.fromSec(timestamp);
+		ros::Duration tolerance = ros::Duration(0.001);
+
+		std::vector<geometry_msgs::PolygonStampedConstPtr> msg_vec = cache_polygon_.getInterval(rostime - tolerance, rostime + tolerance);
+		
+		// assume there is exact match
+		assert (msg_vec.size() <= 1);
+
+		if (msg_vec.size() == 0)
+			return results;
+
+		geometry_msgs::PolygonStampedConstPtr msg = msg_vec[0];
+
+		if (msg->header.stamp.toSec() != timestamp)
+			ROS_WARN_STREAM("Polygon timestamp and request timestamp do no match: " << msg->header.stamp.toSec() << ", " << timestamp);
+
+		std::vector<geometry_msgs::Point32> points = msg->polygon.points;
+
+		assert(points.size()%2 == 0);
+
+		for (int idx = 0; idx < points.size(); idx+=2)
+		{
+			Matcher::Rectangle rect(points[idx].x, points[idx].y, points[idx+1].x, points[idx+1].y);
+			results.push_back(rect);
+		}
+
+		return results;
+	}
 };
 
-cv::Mat cv_drawMatches(cv::Mat cv_leftImg, cv::Mat cv_rightImg, std::vector<Matcher::p_match> _matches, std::vector<int> _inlierIdx)
+cv::Mat cv_drawMatches(cv::Mat cv_leftImg, cv::Mat cv_rightImg, std::vector<Matcher::p_match> _matches, std::vector<int> _inlierIdx, std::vector<Matcher::Rectangle> rects)
 {
 	int num_matches = _matches.size();
 	int num_inliers = _inlierIdx.size();
@@ -485,6 +555,10 @@ cv::Mat cv_drawMatches(cv::Mat cv_leftImg, cv::Mat cv_rightImg, std::vector<Matc
 	cv::Mat outImg;
 	cv::drawMatches(cv_leftImg, match_curr_left, cv_rightImg, match_curr_right, matches1to2, outImg, cv::Scalar(0,255,0), cv::Scalar(255,0,0),mask_inlier);
 
+	for (auto rect : rects)
+	{
+		cv::rectangle(outImg, cv::Point(rect._x1, rect._y1), cv::Point(rect._x2, rect._y2), cv::Scalar(255,0,0));
+	}
 	//cv::Mat outImg(480, 640, CV_8UC3, cv::Scalar(255,0,255));
 
 	return outImg;
@@ -539,6 +613,8 @@ void HistogramContrastBoost(cv::Mat src, double& a, double& b) // returning Open
 
 }
 
+
+
 } // end of namespace
 
 
@@ -567,7 +643,7 @@ int main(int argc, char **argv)
 	local_nh.param("queue_size", queue_size, 1);
 	local_nh.param("visualisation_on", _visualisation_on, false);
 
-	viso2_ros::StereoOdometer odometer(transport,queue_size);
+	viso2_ros::StereoOdometer odometer(transport,queue_size, _visualisation_on);
 
 	int seq_showed = 0;
 

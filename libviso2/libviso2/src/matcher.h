@@ -19,6 +19,23 @@ class Matcher
 
 public:
 
+	class Rectangle{
+		
+
+	public:
+
+		int _x1, _y1;
+		int _x2, _y2;
+		Rectangle(int x1, int y1, int x2, int y2) : _x1(x1), _y1(y1), _x2(x2), _y2(y2) {
+		}
+
+		bool contains(int x, int y){
+			if ( x > _x1 && y > _y1 && x < _x2 && y < _y2)
+				return true;
+			return false;
+		}
+	};
+
 	// bucketing parameters
 	struct bucketing {  
 		bool bucket_ornot;
@@ -113,16 +130,16 @@ public:
 	//        dims[0,1] ...... image width and height (both images must be rectified and of same size)
 	//        dims[2] ........ bytes per line (often equals width)
 	
-	void pushBack(uint8_t *I1, uint8_t* I2, int32_t* dims, const bool replace);
+	void pushBack(uint8_t *I1, uint8_t* I2, double frame_time,int32_t* dims, const bool replace);
 
 	// computes features from a single image and pushes it back to a ringbuffer,
 	// which interally stores the features of the current and previous image pair
 	// use this function for flow computation
 	// parameter description see above
-	void pushBack(uint8_t *I1, int32_t* dims, const bool replace)
-	{
-		pushBack(I1, 0, dims, replace);
-	}
+	// void pushBack(uint8_t *I1, int32_t* dims, const bool replace)
+	// {
+	// 	pushBack(I1, 0, dims, replace);
+	// }
 
 	// match features currently stored in ring buffer (current and previous frame)
 	
@@ -153,6 +170,14 @@ public:
 	}
 
 	double getPercentageFilledBin(){return percentage_filled_bin;}
+
+	double getPreviousFrameTimestamp(){return time_i1;}
+
+	double getCurrentFrameTimestamp(){return time_i2;}
+
+	void setMovingObjects(std::vector<Rectangle> rects){moving_objects = rects;}
+
+	std::vector<Rectangle> getMovingObjects(){return moving_objects;}
 
 	// make it public
 	parameters param;
@@ -266,6 +291,10 @@ private:
 	uint8_t *I1p_dv, *I2p_dv, *I1c_dv, *I2c_dv;
 	uint8_t *I1p_du_full, *I2p_du_full, *I1c_du_full, *I2c_du_full; // only needed for
 	uint8_t *I1p_dv_full, *I2p_dv_full, *I1c_dv_full, *I2c_dv_full; // half-res matching
+
+	double time_i1, time_i2;
+
+	std::vector<Rectangle> moving_objects;
 
 	int32_t dims_p[3], dims_c[3];
 

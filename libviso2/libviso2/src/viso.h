@@ -64,6 +64,10 @@ public:
   // returns the number of inliers: num_inliers <= num_matched
   int32_t getNumberOfInliers () { return inliers.size(); }
 
+  double getPreviousFrameTimestamp(){return matcher->getPreviousFrameTimestamp(); }
+
+  double getCurrentFrameTimestamp(){return matcher->getCurrentFrameTimestamp(); }
+
   // returns the indices of all inliers
   std::vector<int32_t> getInlierIndices () { return inliers; }
   

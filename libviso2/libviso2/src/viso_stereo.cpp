@@ -15,10 +15,10 @@ VisualOdometryStereo::~VisualOdometryStereo()
 {
 }
 
-bool VisualOdometryStereo::process(uint8_t *I1, uint8_t *I2, int32_t* dims, bool replace)
+bool VisualOdometryStereo::process(uint8_t *I1, uint8_t *I2, double frame_time, int32_t* dims, bool replace)
 {
 	auto t1 = std::chrono::system_clock::now();
-	matcher->pushBack(I1, I2, dims, replace);
+	matcher->pushBack(I1, I2, frame_time, dims, replace);
 
 	int left_pre, right_pre, left_curr, right_curr;
 	matcher->getFeatureNumber(left_pre, right_pre, left_curr, right_curr);
@@ -450,5 +450,10 @@ void VisualOdometryStereo::computeResidualsAndJacobian(vector<double> &tr, vecto
 		p_residual[4 * i + 2] = weight*(p_observe[4 * i + 2] - p_predict[4 * i + 2]);
 		p_residual[4 * i + 3] = weight*(p_observe[4 * i + 3] - p_predict[4 * i + 3]);
 	}
+}
+
+void VisualOdometryStereo::setPreviousFrameMovingObjects(std::vector<Matcher::Rectangle> rects)
+{
+	matcher->setMovingObjects(rects);
 }
 

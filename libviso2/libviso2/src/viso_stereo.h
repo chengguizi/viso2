@@ -3,6 +3,8 @@
 
 #include "viso.h"
 
+#include <vector>
+
 class VisualOdometryStereo : public VisualOdometry {
 
 public:
@@ -35,7 +37,11 @@ public:
 	//         dims[1] ... height of I1 and I2 (both must be of same size)
 	//         dims[2] ... bytes per line (often equal to width)
 	// output: returns false if an error occured
-	bool process(uint8_t *I1, uint8_t *I2, int32_t* dims, bool replace=false);
+	bool process(uint8_t *I1, uint8_t *I2, double frame_time, int32_t* dims, bool replace=false);
+
+	void setPreviousFrameMovingObjects(std::vector<Matcher::Rectangle> rects);
+
+	std::vector<Matcher::Rectangle> getPreviousFrameMovingObjects() {return matcher->getMovingObjects(); }
 
 	using VisualOdometry::process;
 

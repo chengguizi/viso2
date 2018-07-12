@@ -120,7 +120,7 @@ int main (int argc, char** argv) {
 			int32_t dims[] = {width,height,width};
 
 			auto start_t = std::chrono::system_clock::now();
-			bool success = viso.process(cv_leftImg.data,cv_rightImg.data,dims);
+			bool success = viso.process(cv_leftImg.data,cv_rightImg.data, 0.0,dims);
 			auto end_t = std::chrono::system_clock::now();
 			std::chrono::duration<double> diff = end_t - start_t;
 			std::cout << ", calc. time: " << diff.count();

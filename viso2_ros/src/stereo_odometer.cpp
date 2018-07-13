@@ -252,8 +252,8 @@ protected:
 
 
 		// check if we manage to process continuous frames in time
-		const int max_missing = 2;
-		if (pre_header.seq + 2 < l_info_msg->header.seq)
+		const int max_missing = 1;
+		if (pre_header.seq + max_missing < l_info_msg->header.seq)
 		{
 			ROS_WARN_STREAM("Missing (" << l_info_msg->header.seq - pre_header.seq - 1 << ") frames...");
 			change_reference_frame_ = false; // since there is skipped frames, better to be safe and do per frame motion estimate

@@ -120,10 +120,11 @@ protected:
 				left_info_topic.c_str(), right_info_topic.c_str());
 
 		image_transport::ImageTransport it(nh);
-		left_sub_.subscribe(it, left_topic, 1, transport); // http://docs.ros.org/diamondback/api/image_transport/html/classimage__transport_1_1TransportHints.html
-		right_sub_.subscribe(it, right_topic, 1, transport);
-		left_info_sub_.subscribe(nh, left_info_topic, 1);
-		right_info_sub_.subscribe(nh, right_info_topic, 1);
+		image_transport::TransportHints hints(transport,ros::TransportHints().tcpNoDelay());
+		left_sub_.subscribe(it, left_topic, 1, hints); // http://docs.ros.org/diamondback/api/image_transport/html/classimage__transport_1_1TransportHints.html
+		right_sub_.subscribe(it, right_topic, 1, hints);
+		left_info_sub_.subscribe(nh, left_info_topic, 1,  ros::TransportHints().tcpNoDelay());
+		right_info_sub_.subscribe(nh, right_info_topic, 1,  ros::TransportHints().tcpNoDelay());
 
 		// Complain every 15s if the topics appear unsynchronized
 		left_sub_.registerCallback(boost::bind(StereoProcessor::increment, &left_received_));

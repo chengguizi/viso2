@@ -108,7 +108,7 @@ public:
 
 		reference_motion_ = Matrix::eye(6);
 
-		sub_polygon_.subscribe(local_nh, moving_object_topics, 1);
+		sub_polygon_.subscribe(local_nh, moving_object_topics, 1, ros::TransportHints().tcpNoDelay());
 		sub_polygon_.registerCallback(boost::bind(&StereoOdometer::polygonCallback, this, _1));
 
 		cache_polygon_.setCacheSize(256);
@@ -275,7 +275,6 @@ protected:
 			stamp = visual_odometer_->getCurrentFrameTimestamp();
 
 		std::vector<Matcher::Rectangle> rectangles = obtainMovingObjectPolygons(stamp);
-
 		
 		ROS_INFO_STREAM( ros::Time(stamp) << " - Polygon received: (" << rectangles.size() << "), oldest: " << cache_polygon_.getOldestTime() 
 			<< ", latest: " << cache_polygon_.getLatestTime () << std::endl;
@@ -372,7 +371,7 @@ protected:
 
 			for (auto rect : rectangles)
 			{
-				cv::rectangle(rectImg, cv::Point(rect._x1, rectImg.rows - rect._y1), cv::Point(rect._x2, rectImg.rows - rect._y2), cv::Scalar(200,0,0), CV_FILLED);
+				cv::rectangle(rectImg, cv::Point(rect._x1, rect._y1), cv::Point(rect._x2, rect._y2), cv::Scalar(255,0,0), CV_FILLED);
 			}
 			
 		}

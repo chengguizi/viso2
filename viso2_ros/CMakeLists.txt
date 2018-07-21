@@ -56,3 +56,5 @@ target_include_directories( stereo_odometer
 )
 
 target_link_libraries(stereo_odometer ${Boost_LIBRARIES} ${catkin_LIBRARIES})
+
+add_dependencies(stereo_odometer ${PROJECT_NAME}_generate_messages_cpp)

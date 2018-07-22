@@ -149,6 +149,48 @@ protected:
 			do_publish_for_ekf = false;
 		}
 
+
+		//// get transform from EKF
+		tf2::Stamped<tf2::Transform> base_to_sensor;
+		
+		try
+		{
+			geometry_msgs::TransformStamped base_to_sensor_msg = tfBuffer.lookupTransform(
+				base_link_frame_id_, // target_frame
+				sensor_frame_id_, // source_frame
+				time_pre ); // target to source
+
+			tf2::fromMsg(base_to_sensor_msg, base_to_sensor);
+			// ROS_INFO_STREAM_THROTTLE(0.5, "base_to_sensor: " << base_to_sensor_msg );
+			
+		}
+		catch (tf2::TransformException ex){
+			if (!global_start_.isZero())
+				ROS_ERROR( "base_to_sensor: %s",ex.what());	
+			base_to_sensor.setIdentity();
+			do_publish_for_ekf = false;
+		}
+
+		tf2::Stamped<tf2::Transform> world_to_base;
+		geometry_msgs::TransformStamped world_to_base_msg;
+		try
+		{
+			world_to_base_msg = tfBuffer.lookupTransform(
+				"world_frame", // target_frame
+				base_link_frame_id_, // source_frame
+				time_pre); // target to source
+
+			tf2::fromMsg(world_to_base_msg, world_to_base);
+			// ROS_INFO_STREAM_THROTTLE(1, "world_to_base: " << world_to_base_msg);
+			
+		}
+		catch (tf2::TransformException ex){
+			if (!global_start_.isZero())
+				ROS_ERROR("world_to_base: %s",ex.what());
+			world_to_base.setIdentity();
+			do_publish_for_ekf = false;
+		}
+
 		//// HM: the integrated pose is with respect to the left camera center ////
 
 		//// INTEGRATION ////
@@ -163,7 +205,14 @@ protected:
 
 		// calculate VO integrated pose (Camera-centred)
 		// delta_transform consist of active rotation matrix of frames t-1 to t
-		integrated_vo_pose_ *= delta_transform; // HM: behave like matrix multiplication in homogenous coordinates
+
+		if ( !global_start_.isZero() && integrated_vo_pose_ == tf2::Transform::getIdentity())
+		{
+			ROS_WARN("Resetting VO Pose to be consistent with Intial EKF Pose");
+			integrated_vo_pose_ = world_to_base * base_to_sensor * delta_transform;
+		}
+		else
+			integrated_vo_pose_ *= delta_transform; // HM: behave like matrix multiplication in homogenous coordinates
 
 		// calculate VO integrated pose (Camera-centred)
 		tf2::Transform base_transform = integrated_vo_pose_;
@@ -218,45 +267,6 @@ protected:
 		//////////////////////////////////
 		// STEP 3, publish world frame pose estimate (for EKF)
 		//////////////////////////////////
-		tf2::Stamped<tf2::Transform> base_to_sensor;
-		
-		try
-		{
-			geometry_msgs::TransformStamped base_to_sensor_msg = tfBuffer.lookupTransform(
-				base_link_frame_id_, // target_frame
-				sensor_frame_id_, // source_frame
-				time_pre ); // target to source
-
-			tf2::fromMsg(base_to_sensor_msg, base_to_sensor);
-			// ROS_INFO_STREAM_THROTTLE(0.5, "base_to_sensor: " << base_to_sensor_msg );
-			
-		}
-		catch (tf2::TransformException ex){
-			if (!global_start_.isZero())
-				ROS_ERROR( "base_to_sensor: %s",ex.what());	
-			base_to_sensor.setIdentity();
-			do_publish_for_ekf = false;
-		}
-
-		tf2::Stamped<tf2::Transform> world_to_base;
-		geometry_msgs::TransformStamped world_to_base_msg;
-		try
-		{
-			world_to_base_msg = tfBuffer.lookupTransform(
-				"world_frame", // target_frame
-				base_link_frame_id_, // source_frame
-				time_pre); // target to source
-
-			tf2::fromMsg(world_to_base_msg, world_to_base);
-			// ROS_INFO_STREAM_THROTTLE(1, "world_to_base: " << world_to_base_msg);
-			
-		}
-		catch (tf2::TransformException ex){
-			if (!global_start_.isZero())
-				ROS_ERROR("world_to_base: %s",ex.what());
-			world_to_base.setIdentity();
-			do_publish_for_ekf = false;
-		}
 
 		
 

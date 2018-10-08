@@ -1,93 +1,182 @@
-#include <ros/ros.h>
+#ifndef ODOMETRY_PARAMS_H
+#define ODOMETRY_PARAMS_H
 
-#include <viso_stereo.h>
+#include <ros/ros.h>
+#include <viso2_eigen/viso2_eigen.h>
+
 
 namespace viso2_ros
 {
+	enum FrameChangeMethod {
+			FLOW,
+			INLIER
+		};
+	
+	struct Parameters{
+		QuadMatcherParam::Parameters qm_param;
+		StereoMotionEstimatorParam::Parameters sme_param;
 
-namespace odometry_params
-{
- 
-/// loads matcher params
-void loadParams(const ros::NodeHandle& local_nh, Matcher::parameters& params)
-{
-	local_nh.getParam("match_binsize",          params.match_binsize);
-	local_nh.getParam("match_radius",           params.match_radius);
-	local_nh.getParam("match_disp_tolerance",   params.match_disp_tolerance);
-	local_nh.getParam("outlier_disp_tolerance", params.outlier_disp_tolerance);
-	local_nh.getParam("outlier_flow_tolerance", params.outlier_flow_tolerance);
-	local_nh.getParam("multi_stage",            params.multi_stage);
-	local_nh.getParam("half_resolution",        params.half_resolution);
-	local_nh.getParam("remove_outliers",        params.remove_outliers);
-	local_nh.getParam("refinement",             params.refinement);
-	local_nh.getParam("fast_threshold_dense",   params.fast_threshold_dense);
-	local_nh.getParam("fast_threshold_sparse",  params.fast_threshold_sparse);
-	local_nh.getParam("numFastFeature_dense",   params.numFastFeature_dense);
-	local_nh.getParam("numFastFeature_sparse",  params.numFastFeature_sparse);
+		
 
-	local_nh.getParam("max_features",  params.bucket.max_features);
-	local_nh.getParam("bucket_ornot",  params.bucket.bucket_ornot);
-}
+		FrameChangeMethod ref_frame_change_method = FLOW; // change reference frame method. 0, 1 or 2. 0 means allways change. 1 and 2 explained below
+		double ref_frame_motion_threshold; // method 1. Change the reference frame if last motion is small
+		int ref_frame_inlier_threshold; // method 2. Change the reference frame if the number of inliers is low
 
-/// loads common & stereo specific params
-void loadParams(const ros::NodeHandle& local_nh, VisualOdometryStereo::parameters& params)
-{
-	loadParams(local_nh, params.match);
-	local_nh.getParam("ransac_iters",     params.ransac_iters);
-	local_nh.getParam("inlier_threshold", params.inlier_threshold);
-	local_nh.getParam("reweighting",      params.reweighting);
-}
+		// double image_pre_scaling;
+		// double image_pre_contrast;
+		// double image_pre_brightness;
 
-} // end of namespace
+		double std_tCov;
+		double std_rCov;
+		// std::string moving_object_topics;
 
-std::ostream& operator<<(std::ostream& out, const Matcher::parameters& params)
-{
-	out << "  match_binsize          = " << params.match_binsize << std::endl;
-	out << "  match_radius           = " << params.match_radius << std::endl;
-	out << "  match_disp_tolerance   = " << params.match_disp_tolerance << std::endl;
-	out << "  outlier_disp_tolerance = " << params.outlier_disp_tolerance << std::endl;
-	out << "  outlier_flow_tolerance = " << params.outlier_flow_tolerance << std::endl;
-	out << "  multi_stage            = " << params.multi_stage << std::endl;
-	out << "  half_resolution        = " << params.half_resolution << std::endl;
-	out << "  remove_outliers        = " << params.remove_outliers << std::endl;
-	out << "  refinement             = " << params.refinement << std::endl;
-	out << "  fast_threshold_dense   = " << params.fast_threshold_dense << std::endl;
-	out << "  fast_threshold_sparse  = " << params.fast_threshold_sparse << std::endl;
-	out << "  numFastFeature_dense   = " << params.numFastFeature_dense << std::endl;
-	out << "  numFastFeature_sparse  = " << params.numFastFeature_sparse << std::endl;
+		//// Stereo Processor
+		int queue_size;
 
-	out << "  bucket_ornot  = " << params.bucket.bucket_ornot << std::endl;
-	out << "  max_features  = " << params.bucket.max_features << std::endl;
-	return out;
-}
-
-std::ostream& operator<<(std::ostream& out, const VisualOdometry::calibration& calibration)
-{
-	out << "  f  = " << calibration.f << std::endl;
-	out << "  cu = " << calibration.cu << std::endl;
-	out << "  cv = " << calibration.cv << std::endl;
-	return out;
-}
-
-std::ostream& operator<<(std::ostream& out, const VisualOdometry::parameters& params)
-{
-	out << "Calibration parameters:" << std::endl << params.calib;
-	out << "Matcher parameters:" << std::endl << params.match;
-	//out << "Bucketing parameters:" << std::endl << params.bucket;
-	return out;
-}
-
-std::ostream& operator<<(std::ostream& out, const VisualOdometryStereo::parameters& params)
-{
-	out << static_cast<VisualOdometry::parameters>(params);
-	out << "Stereo odometry parameters:" << std::endl;
-	out << "  base             = " << params.base << std::endl;
-	out << "  ransac_iters     = " << params.ransac_iters << std::endl;
-	out << "  inlier_threshold = " << params.inlier_threshold << std::endl;
-	out << "  reweighting      = " << params.reweighting << std::endl;
-	return out;
-}
+		std::string left_topic, right_topic;
+		std::string left_info_topic, right_info_topic;
 
 
-} // end of namespace
+		//// Main()
+		bool visualisation_on;
+	};
+	/// loads matcher params
+	void loadParams(const ros::NodeHandle& local_nh, QuadMatcherParam::Parameters& params)
+	{
+		// local_nh.getParam("image_width",          			params.image_width);
+		// local_nh.getParam("image_height",          			params.image_height);
+		// local_nh.getParam("match_radius",           		params.match_radius);
+		ROS_ASSERT(local_nh.getParam("number_of_buckets_in_width",   	params.n_bucket_width));
+		ROS_ASSERT(local_nh.getParam("number_of_buckets_in_height", 	params.n_bucket_height));
+		ROS_ASSERT(local_nh.getParam("epipolar_tolerance", 				params.epipolar_tolerance));
+		ROS_ASSERT(local_nh.getParam("max_neighbor_ratio",            	params.max_neighbor_ratio));
+		ROS_ASSERT(local_nh.getParam("use_bucketing",        			params.use_bucketing));
+		ROS_ASSERT(local_nh.getParam("compulte_scaled_keys",        	params.compulte_scaled_keys));
+	}
 
+	/// loads common & stereo specific params
+	void loadParams(const ros::NodeHandle& local_nh, StereoMotionEstimatorParam::Parameters& params)
+	{
+		// loadParams(local_nh, params.match);
+		ROS_ASSERT(local_nh.getParam("ransac_iters", 						params.ransac_iters));
+		ROS_ASSERT(local_nh.getParam("inlier_threshold",      				params.inlier_threshold));
+		ROS_ASSERT(local_nh.getParam("inlier_ratio_min",      				params.inlier_ratio_min));
+		ROS_ASSERT(local_nh.getParam("reweighting",      					params.reweighting));
+		// local_nh.getParam("image_width",      				params.image_width);
+		// local_nh.getParam("image_height",      				params.image_height);
+		// Calibration
+		// local_nh.getParam("baseline",     					params.baseline);
+		// local_nh.getParam("calib_f",      					params.calib.f);
+		// local_nh.getParam("calib_cu",      					params.calib.cu);
+		// local_nh.getParam("calib_cv",      					params.calib.cv);
+	}
+
+	/// loads common & stereo specific params
+	void loadParams(const ros::NodeHandle& local_nh, Parameters& params)
+	{
+		loadParams(local_nh, params.qm_param);
+		loadParams(local_nh, params.sme_param);
+
+		std::string str;
+		ROS_ASSERT(local_nh.getParam("ref_frame_change_method", 		str));
+		if (str == "flow")
+			params.ref_frame_change_method = FLOW;
+		else if (str == "inlier")
+			params.ref_frame_change_method = INLIER;
+		else
+		{
+			ROS_FATAL("ref_frame_change_method is not defined properly.");
+			exit(-1);
+		}
+		
+		ROS_ASSERT(local_nh.getParam("ref_frame_motion_threshold", 		params.ref_frame_motion_threshold));
+		ROS_ASSERT(local_nh.getParam("ref_frame_inlier_threshold", 		params.ref_frame_inlier_threshold));
+		// ROS_ASSERT(local_nh.getParam("image_pre_scaling", 				params.image_pre_scaling));
+		// ROS_ASSERT(local_nh.getParam("image_pre_contrast", 				params.image_pre_contrast));
+		// ROS_ASSERT(local_nh.getParam("image_pre_brightness", 			params.image_pre_brightness));
+
+		ROS_ASSERT(local_nh.getParam("noise_translation", 				params.std_tCov));
+		ROS_ASSERT(local_nh.getParam("noise_rotation", 					params.std_rCov));
+		// ROS_ASSERT(local_nh.getParam("moving_object_polygons", 			params.moving_object_topics));
+
+		//// Stereo Processor
+		ROS_ASSERT(local_nh.getParam("queue_size", 						params.queue_size));
+		ROS_ASSERT(local_nh.getParam("left_topic", 						params.left_topic));
+		ROS_ASSERT(local_nh.getParam("right_topic", 					params.right_topic));
+		ROS_ASSERT(local_nh.getParam("left_info_topic", 				params.left_info_topic));
+		ROS_ASSERT(local_nh.getParam("right_info_topic", 				params.right_info_topic));
+
+		//// Main()
+		ROS_ASSERT(local_nh.getParam("visualisation_on", 				params.visualisation_on));
+		
+	}
+
+
+
+	
+
+	std::ostream& operator<<(std::ostream& out, const QuadMatcherParam::Parameters& params)
+	{
+		out << "QuadMatcherParam parameters:" << std::endl;
+		out << "  image_width                   = " << params.image_width << std::endl;
+		out << "  image_height                  = " << params.image_height << std::endl;
+		out << "  number_of_buckets_in_width    = " << params.n_bucket_width << std::endl;
+		out << "  number_of_buckets_in_height   = " << params.n_bucket_height << std::endl;
+		out << "  epipolar_tolerance            = " << params.epipolar_tolerance << std::endl;
+		out << "  max_neighbor_ratio            = " << params.max_neighbor_ratio << std::endl;
+		out << "  use_bucketing                 = " << params.use_bucketing << std::endl;
+		out << "  compulte_scaled_keys          = " << params.compulte_scaled_keys << std::endl;
+		return out;
+	}
+
+	std::ostream& operator<<(std::ostream& out, const StereoMotionEstimatorParam::Parameters& params)
+	{
+		out << "StereoMotionEstimatorParam parameters:" << std::endl;
+		
+		out << "  ransac_iters          = " << params.ransac_iters << std::endl;
+		out << "  inlier_threshold      = " << params.inlier_threshold << std::endl;
+		out << "  inlier_ratio_min      = " << params.inlier_ratio_min << std::endl;
+		out << "  reweighting           = " << params.reweighting << std::endl;
+		out << "  image_width           = " << params.image_width << std::endl;
+		out << "  image_height          = " << params.image_height << std::endl;
+
+		out << "  baseline              = " << params.calib.baseline << std::endl;
+		out << "  calib_f               = " << params.calib.f << std::endl;
+		out << "  calib_cu              = " << params.calib.cu << std::endl;
+		out << "  calib_cv              = " << params.calib.cv << std::endl;
+		return out;
+	}
+
+	std::ostream& operator<<(std::ostream& out, const Parameters& params)
+	{
+		out << params.qm_param;
+		out << params.sme_param;
+		out << "Stereo Odometer (Main) parameters:" << std::endl;
+		out << "  ref_frame_change_method       = " << (params.ref_frame_change_method == FLOW ? "FLOW" : "INLIER") << std::endl;
+		out << "  ref_frame_motion_threshold    = " << params.ref_frame_motion_threshold << std::endl;
+		out << "  ref_frame_inlier_threshold    = " << params.ref_frame_inlier_threshold << std::endl;
+		// out << "  image_pre_scaling             = " << params.image_pre_scaling << std::endl;
+		// out << "  image_pre_contrast            = " << params.image_pre_contrast << std::endl;
+		// out << "  image_pre_brightness          = " << params.image_pre_brightness << std::endl;
+
+		out << "  noise_translation             = " << params.std_tCov << std::endl;
+		out << "  noise_rotation                = " << params.std_rCov << std::endl;
+		// out << "  moving_object_polygons		= " << params.moving_object_topics << std::endl;
+
+		out << "  queue_size                    = " << params.queue_size << std::endl;
+		out << "  left_topic                    = " << params.left_topic << std::endl;
+		out << "  right_topic                   = " << params.right_topic << std::endl;
+		out << "  left_info_topic               = " << params.left_info_topic << std::endl;
+		out << "  right_info_topic              = " << params.right_info_topic << std::endl;
+
+		out << "  visualisation_on              = " << params.visualisation_on << std::endl;
+
+		out << "============================End of Paramters=================================" << std::endl;
+
+		return out;
+	}
+
+} // end of namespace viso2_ros
+
+
+#endif /* ODOMETRY_PARAMS_H */

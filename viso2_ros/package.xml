@@ -13,7 +13,7 @@
 
   <buildtool_depend>catkin</buildtool_depend>
 
-  <build_depend>libviso2</build_depend>
+  <build_depend>libviso2_eigen</build_depend>
   <build_depend>roscpp</build_depend>
   <build_depend>sensor_msgs</build_depend>
   <build_depend>nav_msgs</build_depend> 
@@ -21,13 +21,14 @@
   <build_depend>image_transport</build_depend>
   <build_depend>cv_bridge</build_depend> 
   <build_depend>image_geometry</build_depend> 
-  <build_depend>tf2_ros</build_depend> 
-  <build_depend>PCL</build_depend>
-  <build_depend>pcl_ros</build_depend> 
+  <build_depend>tf2_ros</build_depend>
+  <build_depend>tf2_eigen</build_depend> 
+  <build_depend>rosbag</build_depend> 
   <build_depend>std_srvs</build_depend> 
-  <build_depend>message_generation</build_depend> 
+  <build_depend>message_generation</build_depend>
+  <build_depend>dlib_ros</build_depend>
   
-  <run_depend>libviso2</run_depend> 
+  <run_depend>libviso2_eigen</run_depend> 
   <run_depend>roscpp</run_depend> 
   <run_depend>sensor_msgs</run_depend>
   <run_depend>nav_msgs</run_depend>
@@ -36,9 +37,10 @@
   <run_depend>cv_bridge</run_depend>
   <run_depend>image_geometry</run_depend> 
   <run_depend>tf2_ros</run_depend>
-  <run_depend>PCL</run_depend>
-  <run_depend>pcl_ros</run_depend>
+  <run_depend>tf2_eigen</run_depend>
+  <run_depend>rosbag</run_depend> 
   <run_depend>std_srvs</run_depend>
   <run_depend>message_runtime</run_depend>
+  <run_depend>dlib_ros</run_depend>
 
 </package>

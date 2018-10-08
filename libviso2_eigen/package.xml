@@ -1,5 +1,5 @@
 <package>
-  <name>libviso2</name>
+  <name>libviso2_eigen</name>
   <version>0.0.1</version>
   <description>This is a ROS-Package for libviso2, a library for visual odometry created by Andeas Geiger
     from the Institute of Measurement and Control Systems at Karlsruhe Institute of Technology.

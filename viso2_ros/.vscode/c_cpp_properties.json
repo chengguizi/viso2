@@ -1,0 +1,17 @@
+{
+  "configurations": [
+    {
+      "browse": {
+        "databaseFilename": "",
+        "limitSymbolsToIncludedHeaders": true
+      },
+      "includePath": [
+        "/home/dhl/git/catkin_ws/devel/include",
+        "/opt/ros/kinetic/include",
+        "/home/dhl/git/catkin_ws/src/viso2/libviso2_eigen/include",
+        "/usr/include"
+      ],
+      "name": "Linux"
+    }
+  ]
+}

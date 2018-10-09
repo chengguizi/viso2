@@ -240,7 +240,10 @@ protected:
 
 int main(int argc, char **argv)
 {
-	// cv::namedWindow(cv_window_name, cv::WINDOW_AUTOSIZE);
+	std::string cv_window_name_left = "Current Frame Left";
+	std::string cv_window_name_right = "Current Frame Right";
+	cv::namedWindow(cv_window_name_left, cv::WINDOW_AUTOSIZE);
+	cv::namedWindow(cv_window_name_right, cv::WINDOW_AUTOSIZE);
 
 
 	// ROS Initialisation
@@ -268,8 +271,8 @@ int main(int argc, char **argv)
 			if ( seq_showed != last )
 			{
 				odometer.getVisualisation(outImg,outImg_right);
-				cv::imshow("Current Frame", outImg);
-				cv::imshow("Current Frame Right", outImg_right);
+				cv::imshow(cv_window_name_left, outImg);
+				cv::imshow(cv_window_name_right, outImg_right);
 				cvWaitKey(1);
 				seq_showed = last;
 			}else

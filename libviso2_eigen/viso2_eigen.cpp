@@ -195,16 +195,20 @@ bool Viso2Eigen::process(const cv::Mat& leftImage, const cv::Mat& rightImage, Vi
         //// Visualisation Code
         begin = std::chrono::steady_clock::now();
 
-        cv::cvtColor(leftImage,outImg,cv::COLOR_GRAY2BGR);
-        cv::cvtColor(rightImage,outImg_right,cv::COLOR_GRAY2BGR);
+        cv::Mat outImg_tmp, outImg_right_tmp;
+        cv::cvtColor(leftImage,outImg_tmp,cv::COLOR_GRAY2BGR);
+        cv::cvtColor(rightImage,outImg_right_tmp,cv::COLOR_GRAY2BGR);
         // cv::Mat outIm(cv::Size(qm_param.image_width,qm_param.image_height),CV_8UC1);
-        cv::drawKeypoints(leftImage, keys_l2,outImg, cv::Scalar(0,0,255), cv::DrawMatchesFlags::DRAW_OVER_OUTIMG);
-        cv::drawKeypoints(rightImage, keys_r2,outImg_right, cv::Scalar(0,0,255), cv::DrawMatchesFlags::DRAW_OVER_OUTIMG);
+        cv::drawKeypoints(leftImage, keys_l2,outImg_tmp, cv::Scalar(0,0,255), cv::DrawMatchesFlags::DRAW_OVER_OUTIMG);
+        cv::drawKeypoints(rightImage, keys_r2,outImg_right_tmp, cv::Scalar(0,0,255), cv::DrawMatchesFlags::DRAW_OVER_OUTIMG);
 
-        drawKeypointMotion(outImg, outImg_right);
+        drawKeypointMotion(outImg_tmp, outImg_right_tmp);
 
-        cv::putText(outImg, std::to_string(stamp), cv::Point(5 /*column*/ ,30 /*row*/), cv::FONT_HERSHEY_COMPLEX_SMALL, 1.0, cv::Scalar(255,255,255));
-        cv::putText(outImg_right, std::to_string(stamp), cv::Point(5 /*column*/ ,30 /*row*/), cv::FONT_HERSHEY_COMPLEX_SMALL, 1.0, cv::Scalar(255,255,255));
+        cv::putText(outImg_tmp, std::to_string(stamp), cv::Point(5 /*column*/ ,30 /*row*/), cv::FONT_HERSHEY_COMPLEX_SMALL, 1.0, cv::Scalar(255,255,255));
+        cv::putText(outImg_right_tmp, std::to_string(stamp), cv::Point(5 /*column*/ ,30 /*row*/), cv::FONT_HERSHEY_COMPLEX_SMALL, 1.0, cv::Scalar(255,255,255));
+
+        outImg = outImg_tmp;
+        outImg_right= outImg_right_tmp;
 
         end = std::chrono::steady_clock::now();
 

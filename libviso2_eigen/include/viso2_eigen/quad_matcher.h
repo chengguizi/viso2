@@ -182,7 +182,7 @@ void QuadMatcher<TDescriptor, TFeature>::pushBackData(
     assert( keyl2.size() == desl2.size() );
     assert( keyr2.size() == desr2.size() );
 
-    std::cout << "Creating Bucket Indices" << std::endl;
+    // std::cout << "Creating Bucket Indices" << std::endl;
 
     createBucketIndices(this->keyl1,bucketl1);
     createBucketIndices(this->keyr1,bucketr1);
@@ -210,19 +210,20 @@ bool QuadMatcher<TDescriptor, TFeature>::matchFeaturesQuad() {
 
     matches.clear();
 
-    int pre = distance_counter;
+    // int pre = distance_counter;
     // TODO: for the NONE case, the homographic transformation could be estimated after a few initial match
     updateMatchList (0, 1, keyl1, bucketl2, keyl2, desl1, desl2, NONE); // previous left --> current left
+    int initial_match_size = matches.size();
     updateMatchList (1, 2, keyl2, bucketr2, keyr2, desl2, desr2, LEFT_ONLY); // current left --> current right
     updateMatchList (2, 3, keyr2, bucketr1, keyr1, desr2, desr1, NONE); // current right --> previous right
     updateMatchList (3, 4, keyr1, bucketl1, keyl1, desr1, desl1, RIGHT_ONLY); // previous right --> previous left
 
         
 
-    std::cout << "distance() routine is called " << distance_counter - pre <<  " times" << std::endl;
+    // std::cout << "distance() routine is called " << distance_counter - pre <<  " times" << std::endl;
     
 
-    int list_size = matches.size();
+    // int list_size = matches.size();
 
     // Clean up wrong looped matches
     auto it = matches.begin();
@@ -234,10 +235,12 @@ bool QuadMatcher<TDescriptor, TFeature>::matchFeaturesQuad() {
         }else
             it++;
     }
-    std::cout << "Matching loop closes: " << matches.size() << " of " << list_size << std::endl;
+    std::cout << "Matching loop closes: " << matches.size() << " out of " << initial_match_size << "(l1->l2)"<< std::endl;
     
     data_ready = false;
-    return matches.size();
+
+    // We need at least 6 points to make meaningful calculations
+    return (matches.size() > 5);
 }
 
 
@@ -446,12 +449,12 @@ void QuadMatcher<TDescriptor, TFeature>::updateMatchList(
             }
         }
 
-        std::cout << "Found " << matches.size() << " matches between 0 and 1" << std::endl;
+        // std::cout << "Found " << matches.size() << " matches between 0 and 1" << std::endl;
     }
     // else, use the [matches_source] column as the query points
     else {
 
-        int list_size = matches.size();
+        // int list_size = matches.size();
 
         auto it = matches.begin();
         while(it != matches.end())
@@ -479,8 +482,8 @@ void QuadMatcher<TDescriptor, TFeature>::updateMatchList(
             }
         }
 
-        std::cout << "Matches " << matches.size() << " out of previous " << list_size << " from " 
-            <<  matches_source << " to " << matches_target << std::endl;
+        // std::cout << "Matches " << matches.size() << " out of previous " << list_size << " from " 
+        //     <<  matches_source << " to " << matches_target << std::endl;
     }
 }
 

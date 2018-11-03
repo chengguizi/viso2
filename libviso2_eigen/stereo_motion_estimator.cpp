@@ -89,7 +89,7 @@ std::vector<double> StereoMotionEstimator::estimateMotion()
 
 	// Sanity check for number of matches
 	const int N = matches_quad_vec->size();
-    if (N < 4)
+    if (N < 6)
     {
         std::cerr << "Total poll of matches is too small, aborting viso: " << N << std::endl;
         return std::vector<double>();
@@ -111,7 +111,7 @@ std::vector<double> StereoMotionEstimator::estimateMotion()
 	// Defined the min-dist between any random 3 matches
 	float min_dist = std::max(width_max-width_min, height_max-height_min) / 5.f;	// default divided by 3.0
 
-	std::cout << "min_dist=" << min_dist << std::endl;
+	// std::cout << "min_dist=" << min_dist << std::endl;
 
     if ( min_dist < std::min(param.image_height, param.image_width) / 20.f  )
     {
@@ -164,7 +164,8 @@ std::vector<double> StereoMotionEstimator::estimateMotion()
 	std::vector<int> best_active;
 
 	// // initial RANSAC estimate
-	for (int k = 0; k < param.ransac_iters; k++)
+	int max_iteration = N*N*N / 5;
+	for (int k = 0; k < param.ransac_iters && k <  max_iteration ; k++)
 	{
         // std::cout << "Begin k=" << k << std::endl;
         // active stores the current active rows in matches_quad_vec
@@ -195,7 +196,7 @@ std::vector<double> StereoMotionEstimator::estimateMotion()
 			if (d0 >= min_dist && d1 >= min_dist && d2 >= min_dist)
 				break;
 
-			if (selection_iter >= 100)
+			if (selection_iter >= 50)
             {
                 std::cerr << "Finding RANSAC 3 matches > min_dist not possible..." << std::endl;
 				break;
@@ -292,8 +293,14 @@ std::vector<double> StereoMotionEstimator::estimateMotion()
 	if ( inliers.size() / (double)N < param.inlier_ratio_min )
 	{
 		std::cout << "ERROR: Inlier % too small! Return false." << std::endl;
-		this->result.tr_delta = tr_delta;
-		this->result.inliers = getInlier(tr_delta);
+		if (tr_delta.size() > 0){
+			this->result.tr_delta = tr_delta;
+			this->result.inliers = getInlier(tr_delta);
+		}else{
+			this->result.tr_delta = std::vector<double>(6);
+			this->result.inliers = std::vector<int>();
+		}
+		
 		return std::vector<double>();
 	}
 
@@ -343,7 +350,7 @@ std::vector<double> StereoMotionEstimator::estimateMotion()
 	this->result.inliers = getInlier(tr_delta);
 	
 	std::cout << "inliers.size()= " << inliers.size() << " , this->result.inliers.size()= " << this->result.inliers.size() << std::endl;
-	assert( this->result.inliers.size() >= inliers.size()*0.7);
+	assert( this->result.inliers.size() < 10 || this->result.inliers.size() >= inliers.size()*0.7);
 	
 	return tr_delta;
 }

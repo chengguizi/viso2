@@ -47,13 +47,20 @@ bool Viso2Eigen::process(const cv::Mat& leftImage, const cv::Mat& rightImage, Vi
         des_l1 = std::move(des_l2);
         des_r1 = std::move(des_r2);
 
-        assert(!keys_l1.empty() && !des_l1.empty());
+        // assert(!keys_l1.empty() && !des_l1.empty());
     }
 
     keys_l2.clear();
     keys_r2.clear();
     des_l2.clear();
     des_r2.clear();
+
+    //// Visualisation comes first
+    cv::Mat outImg_tmp, outImg_right_tmp;
+    cv::cvtColor(leftImage,outImg_tmp,cv::COLOR_GRAY2BGR);
+    cv::cvtColor(rightImage,outImg_right_tmp,cv::COLOR_GRAY2BGR);
+    outImg = outImg_tmp;
+    outImg_right= outImg_right_tmp;
 
     //////////////////////////////
     //// STEP 2: Calculate current frame keys and descriptors
@@ -145,8 +152,6 @@ bool Viso2Eigen::process(const cv::Mat& leftImage, const cv::Mat& rightImage, Vi
 
         if (mode == FIRST_FRAME)
         {
-            outImg = leftImage.clone();
-            outImg_right = rightImage.clone();
             return true;
         }
     }
@@ -158,13 +163,19 @@ bool Viso2Eigen::process(const cv::Mat& leftImage, const cv::Mat& rightImage, Vi
     //////////////////////////////
     bool qm_result;
     {
-        auto begin = std::chrono::steady_clock::now();
-        qm->pushBackData(keys_l1,keys_l2,keys_r1,keys_r2, des_l1,des_l2,des_r1,des_r2);
-        qm_result = qm->matchFeaturesQuad();
-        auto end = std::chrono::steady_clock::now();
 
-            std::cout << "Calc Quad Matching = " 
-        << std::chrono::duration_cast<std::chrono::milliseconds>(end - begin).count() << "ms" <<std::endl;
+        if (keys_l1.size()<4 || keys_l2.size()<4 || keys_r1.size()<4 || keys_r2.size()<4)
+            qm_result = false;
+        else{
+            auto begin = std::chrono::steady_clock::now();
+            qm->pushBackData(keys_l1,keys_l2,keys_r1,keys_r2, des_l1,des_l2,des_r1,des_r2);
+            qm_result = qm->matchFeaturesQuad();
+            auto end = std::chrono::steady_clock::now();
+
+                std::cout << "Calc Quad Matching = " 
+            << std::chrono::duration_cast<std::chrono::milliseconds>(end - begin).count() << "ms" <<std::endl;
+        }
+        
 
     }
     
@@ -195,17 +206,15 @@ bool Viso2Eigen::process(const cv::Mat& leftImage, const cv::Mat& rightImage, Vi
         //// Visualisation Code
         begin = std::chrono::steady_clock::now();
 
-        cv::Mat outImg_tmp, outImg_right_tmp;
-        cv::cvtColor(leftImage,outImg_tmp,cv::COLOR_GRAY2BGR);
-        cv::cvtColor(rightImage,outImg_right_tmp,cv::COLOR_GRAY2BGR);
+        
         // cv::Mat outIm(cv::Size(qm_param.image_width,qm_param.image_height),CV_8UC1);
         cv::drawKeypoints(leftImage, keys_l2,outImg_tmp, cv::Scalar(0,0,255), cv::DrawMatchesFlags::DRAW_OVER_OUTIMG);
         cv::drawKeypoints(rightImage, keys_r2,outImg_right_tmp, cv::Scalar(0,0,255), cv::DrawMatchesFlags::DRAW_OVER_OUTIMG);
 
         drawKeypointMotion(outImg_tmp, outImg_right_tmp);
 
-        cv::putText(outImg_tmp, std::to_string(stamp), cv::Point(5 /*column*/ ,30 /*row*/), cv::FONT_HERSHEY_COMPLEX_SMALL, 1.0, cv::Scalar(255,255,255));
-        cv::putText(outImg_right_tmp, std::to_string(stamp), cv::Point(5 /*column*/ ,30 /*row*/), cv::FONT_HERSHEY_COMPLEX_SMALL, 1.0, cv::Scalar(255,255,255));
+        cv::putText(outImg_tmp, "Left: " + std::to_string(stamp), cv::Point(5 /*column*/ ,30 /*row*/), cv::FONT_HERSHEY_COMPLEX_SMALL, 1.0, cv::Scalar(255,255,255));
+        cv::putText(outImg_right_tmp, "Right: " + std::to_string(stamp), cv::Point(5 /*column*/ ,30 /*row*/), cv::FONT_HERSHEY_COMPLEX_SMALL, 1.0, cv::Scalar(255,255,255));
 
         outImg = outImg_tmp;
         outImg_right= outImg_right_tmp;

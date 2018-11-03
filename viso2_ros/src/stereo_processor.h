@@ -115,11 +115,11 @@ protected:
 				param.left_info_topic.c_str(), param.right_info_topic.c_str());
 
 		image_transport::ImageTransport it(nh);
-		image_transport::TransportHints hints(transport,ros::TransportHints().tcpNoDelay());
-		left_sub_.subscribe(it, param.left_topic, 1, hints); // http://docs.ros.org/diamondback/api/image_transport/html/classimage__transport_1_1TransportHints.html
-		right_sub_.subscribe(it, param.right_topic, 1, hints);
-		left_info_sub_.subscribe(nh, param.left_info_topic, 1,  ros::TransportHints().tcpNoDelay());
-		right_info_sub_.subscribe(nh, param.right_info_topic, 1,  ros::TransportHints().tcpNoDelay());
+		//image_transport::TransportHints hints(transport,ros::TransportHints().tcpNoDelay());
+		left_sub_.subscribe(it, param.left_topic, 10); //, hints); // http://docs.ros.org/diamondback/api/image_transport/html/classimage__transport_1_1TransportHints.html
+		right_sub_.subscribe(it, param.right_topic, 10); //, hints);
+		left_info_sub_.subscribe(nh, param.left_info_topic, 10); //, ros::TransportHints().tcpNoDelay());
+		right_info_sub_.subscribe(nh, param.right_info_topic, 10); //,  ros::TransportHints().tcpNoDelay());
 
 		// Complain every 15s if the topics appear unsynchronized
 		left_sub_.registerCallback(boost::bind(StereoProcessor::increment, &left_received_));

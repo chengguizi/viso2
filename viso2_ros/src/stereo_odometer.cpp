@@ -19,6 +19,8 @@
 
 #include <memory>
 
+#include <cmath>
+
 namespace viso2_ros
 {
 
@@ -31,6 +33,7 @@ class StereoOdometer : public StereoProcessor , public OdometerBase
 
 private:
 
+	ros::Subscriber _reset_sub;
 	std::unique_ptr<Viso2Eigen> viso2;
 	viso2_ros::Parameters param;
 
@@ -57,8 +60,15 @@ public:
 		StereoProcessor(transport, param.queue_size, param.left_topic, param.right_topic, param.left_info_topic, param.right_info_topic), // OdometerBase(), 
 		viso2(new Viso2Eigen()), param(param)
 	{
-		voState.tfStamped.reserve(1000);
+		
+		voState.tfStamped.reserve(2);
 		ROS_INFO("StereoOdometer() initialised! Waiting for images...");
+
+		// Resolve topic names
+		ros::NodeHandle nh;
+
+		// Subscribe to reset topic
+    	_reset_sub = nh.subscribe("/reset", 1, &StereoOdometer::resetCallback, this);
 	}
 
 	~StereoOdometer(){
@@ -96,6 +106,11 @@ protected:
 		//if (l_info_msg->header.frame_id != "") setSensorFrameId(l_info_msg->header.frame_id);
 		ROS_INFO_STREAM("Initialized libviso2 stereo odometry with the following parameters:" << std::endl << param );
 	}
+
+	void resetCallback(const std_msgs::HeaderPtr &header){
+		ROS_WARN_STREAM("Reset occurs at " << header->stamp );
+		resetPose();
+	}
 	
 	bool disable_debug = false;
 	void imageCallback(
@@ -132,12 +147,17 @@ protected:
 
 		// outImg = cv_leftImg_source.clone();
 		
-
+		// hm: only keep two records
+		if (voState.tfStamped.size() == 3)
+			voState.tfStamped.erase(voState.tfStamped.begin());
 
 		const int state_idx = voState.tfStamped.size() - 1;
 		const int state_idx_next = voState.tfStamped.size();
+
 		voState.tfStamped.push_back(TfStamped()); // preallocate the next state, no matter failure
 
+		// hm: for the moment we only keep the recent two record
+		assert (state_idx <= 1);
 
 		std::cout << "\n\nimageCallback(): frame " << state_idx << " at " << l_image_msg->header.stamp << std::endl;
 
@@ -157,23 +177,48 @@ protected:
 		bool viso2_result = viso2->process(cv_leftImg_source, cv_rightImg_source, mode, cvImage_l->header.stamp.toNSec() );
 		if (mode != Viso2Eigen::Mode::FIRST_FRAME) profiler.stop();
 
-		std::cout <<"viso2->process()"<<std::endl;
+		// std::cout <<"viso2->process()"<<std::endl;
 
 		voState.last_frame_time_ns = cvImage_l->header.stamp.toNSec(); // must be updated after process()
 
+		cv::Mat outImg, outImg_right;
 		if (mode == Viso2Eigen::Mode::FIRST_FRAME)
 		{
 			assert(viso2_result);
 			voState.tfStamped[state_idx].stamp = cvImage_l->header.stamp.toNSec();
 			std::cerr << "First frame process() SUCCESS" << std::endl;
+
+			// we still want visualisation
+			getVisualisation(outImg, outImg_right);
+			publishDebugImg(outImg,outImg_right,l_info_msg,r_info_msg,cvImage_l->header.stamp);
 			return;
 		}
 
+		//////////////////////
+		//// Quick sanity check
+		//////////////////////
+
+		if (viso2_result){
+			Eigen::Affine3d tf = voState.reference_motion.inverse() * viso2->getCameraMotion();
+			Eigen::Vector3d origin = {0,0,0};
+			origin = tf * origin;
+			if (origin.norm() > 1.0){
+				ROS_WARN_STREAM("Translation delta too big : " << origin.transpose() );
+				ROS_WARN_STREAM(tf.matrix());
+				viso2_result = false;
+			}
+
+			Eigen::AngleAxis<double> motion_aa(tf.rotation());
+			if (std::abs(motion_aa.angle())/M_PI*180.0 > 60){
+				ROS_WARN_STREAM("Angle delta too big : " << motion_aa.angle() );
+				viso2_result = false;
+			}
+		}
 		
 		if (viso2_result){
 			
 			Eigen::Affine3d cameraMotion = viso2->getCameraMotion();
-			std::vector<int> inliers = viso2->getInlier();
+			
 
 		//////////////////////////////////////
 		//// STEP 2: Obtain Camera Motion Delta
@@ -200,24 +245,48 @@ protected:
 				voState.tfStamped[state_idx_next].use_old_reference_frame = true;
 				voState.reference_motion = cameraMotion;
 			}
+		
+		//////////////////////////////////////
+		//// STEP 4: Calculate Variance
+		//////////////////////////////////////
+
+		std::vector<int> inliers = viso2->getInlier();
+
+		double variance = 1.0 / std::pow(inliers.size(),3);
+
+		std::cout << "variance = " << variance << std::endl;
 
 		//////////////////////////////////////
-		//// STEP 4: Publish to ROS
+		//// STEP 5: Publish to ROS
 		//////////////////////////////////////
 
-			std::cout << "Frame: " << state_idx << " stamp: " << voState.tfStamped[state_idx].stamp << std::endl; 
+			setPoseCovariance(variance,0);
+
+			// std::cout << "Frame: " << state_idx << " stamp: " << voState.tfStamped[state_idx].stamp << std::endl; 
 			std::cout << "tf:\n" << voState.tfStamped[state_idx].tf.matrix() << std::endl;
-			std::cout << "flow: " << opticalFlow << " " 
+			std::cout << "flow: " << opticalFlow << " -> " 
 				<< (voState.tfStamped[state_idx_next].use_old_reference_frame ? "use_old_frame next" : "replace_frame next") << std::endl;
 
 			integrateAndPublish(voState.tfStamped[state_idx].tf, voState.tfStamped[state_idx].stamp, voState.tfStamped[state_idx-1].stamp);
+		
+		//////////////////////////////////////
+		//// STEP 6: Publish Visualisation
+		//////////////////////////////////////
 		
 
 		}else{
 			std::cerr << "process() FAILED" << std::endl;
 			voState.tfStamped[state_idx].lost = true;
-			disable_debug = true;
+			voState.tfStamped[state_idx_next].use_old_reference_frame = false;
+			
+			outImg = cv_leftImg_source;
+			outImg_right = cv_rightImg_source;
+
+			disable_debug = false;
 		}
+
+		getVisualisation(outImg, outImg_right);
+		publishDebugImg(outImg,outImg_right,l_info_msg,r_info_msg,cvImage_l->header.stamp);
 	}
 
 	// double computeFeatureFlow(
@@ -240,15 +309,18 @@ protected:
 
 int main(int argc, char **argv)
 {
-	std::string cv_window_name_left = "Current Frame Left";
-	std::string cv_window_name_right = "Current Frame Right";
-	cv::namedWindow(cv_window_name_left, cv::WINDOW_AUTOSIZE);
-	cv::namedWindow(cv_window_name_right, cv::WINDOW_AUTOSIZE);
+	// std::string cv_window_name_left = "Current Frame Left";
+	// std::string cv_window_name_right = "Current Frame Right";
+	// cv::namedWindow(cv_window_name_left, cv::WINDOW_AUTOSIZE);
+	// cv::namedWindow(cv_window_name_right, cv::WINDOW_AUTOSIZE);
 
 
 	// ROS Initialisation
 	ros::init(argc, argv, "stereo_odometer");
+	ros::NodeHandle nh;
 	ros::NodeHandle local_nh("~");
+
+	
 
 	// Loading Parameters except calibration details
 	viso2_ros::Parameters param;
@@ -270,9 +342,11 @@ int main(int argc, char **argv)
 			uint64_t last = odometer.getLastFrameTimeNs();
 			if ( seq_showed != last )
 			{
-				odometer.getVisualisation(outImg,outImg_right);
-				cv::imshow(cv_window_name_left, outImg);
-				cv::imshow(cv_window_name_right, outImg_right);
+				// cv::Mat outImg, outImg_right;
+				
+				// odometer.getVisualisation(outImg,outImg_right);
+				// cv::imshow(cv_window_name_left, outImg);
+				// cv::imshow(cv_window_name_right, outImg_right);
 				cvWaitKey(1);
 				seq_showed = last;
 			}else

@@ -60,7 +60,8 @@ catkin_package(
 ### NO.8 libraries / excutables
 
 add_executable(stereo_odometer
-  src/stereo_odometer.cpp)
+  src/stereo_odometer.cpp
+  src/ros_publisher.cpp)
 
 target_include_directories( stereo_odometer
   PUBLIC
@@ -68,10 +69,20 @@ target_include_directories( stereo_odometer
     ${catkin_INCLUDE_DIRS}
 )
 
+# add_library(ros_publisher
+#   src/ros_publisher.cpp)
+
+#   target_include_directories( ros_publisher
+#   PUBLIC
+#     ${catkin_INCLUDE_DIRS}
+# )
+
 # message("viso2_eigen_LIBRARIES=${viso2_eigen_LIBRARIES}")
 # message("libviso2_eigen_LIBRARIES=${libviso2_eigen_LIBRARIES}")
 # message("catkin_LIBRARIES=${catkin_LIBRARIES}")
 
 target_link_libraries(stereo_odometer ${Boost_LIBRARIES} ${catkin_LIBRARIES})
+
+# target_link_libraries(ros_publisher ${Boost_LIBRARIES} ${catkin_LIBRARIES})
 
 add_dependencies(stereo_odometer ${PROJECT_NAME}_generate_messages_cpp)

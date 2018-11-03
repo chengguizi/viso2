@@ -14,6 +14,8 @@
 
 #include <Eigen/Eigen>
 
+#include "ros_publisher.hpp"
+
 namespace viso2_ros
 {
 
@@ -27,13 +29,19 @@ class OdometerBase
 
 private:
 
-	rosbag::Bag bag;
+	// rosbag::Bag bag;
 
 	// publisher
 	ros::Publisher odom_pub_; // odometry using pure VO algorithm, no fusion at all
 	ros::Publisher pose_pub_; // odometry in pose format using pure VO algorithm, no fusion at all
+	ros::Publisher vel_pub_;
 
-	ros::ServiceServer reset_service_;
+	ros::Subscriber ekf_sub_;
+	
+
+	StereoCameraPublisher debug_pub_;
+
+	// ros::ServiceServer reset_service_;
 
 	// tf related
 	const std::string sensor_frame_id_ = "camera_frame";
@@ -44,10 +52,14 @@ private:
 
 	uint64_t global_start_;
 
-	bool isEKFEnabled;
+	bool use_ekf_pose_as_initial;
+	bool isGlobalPoseEnabled;
+	std::string initial_pose_topic;
 
 	// the current integrated camera pose
 	Eigen::Affine3d integrated_vo_pose_;
+	Eigen::Affine3d initial_imu_pose;
+	Eigen::Affine3d Tr_ci; // this is read from parameter
 
 	// covariances
 	boost::array<double, 36> pose_covariance_ = {};
@@ -55,23 +67,35 @@ private:
 
 public:
 
-	OdometerBase() : global_start_(0), isEKFEnabled(true)
+	OdometerBase() : global_start_(0), isGlobalPoseEnabled(false)
 	{
 	// Read local parameters
 	ros::NodeHandle local_nh("~");
+	ros::NodeHandle nh;
 	
 	// advertise
 	odom_pub_ = local_nh.advertise<nav_msgs::Odometry>("odometry", 3);
 	pose_pub_ = local_nh.advertise<geometry_msgs::PoseWithCovarianceStamped>("pose", 3);
+	vel_pub_ = local_nh.advertise<geometry_msgs::PoseWithCovarianceStamped>("velocity", 3);
 
-	// reset service
-	reset_service_ = local_nh.advertiseService("reset_pose", &OdometerBase::resetPose, this);
+	
 
-	bag.open("/tmp/viso_ros_pose.bag",rosbag::bagmode::Write);
+	ROS_ASSERT(local_nh.getParam("use_ekf_pose_as_initial", 						use_ekf_pose_as_initial));
+	ROS_ASSERT(local_nh.getParam("initial_pose_topic", 						initial_pose_topic));
 
-	// reset outputs for publishers
+	initial_imu_pose.matrix().setZero();
 
-	integrated_vo_pose_.setIdentity();
+	if (use_ekf_pose_as_initial)
+		ekf_sub_ = nh.subscribe("/ekf_fusion/pose",3, &OdometerBase::ekfCallback, this);
+
+	// bag.open("/tmp/viso_ros_pose.bag",rosbag::bagmode::Write);
+	loadCameraImuTransform();
+	resetPose();
+	}
+
+	void publishDebugImg(const cv::Mat &imageLeft_cv,const  cv::Mat &imageRight_cv,const  sensor_msgs::CameraInfoConstPtr &cameraInfo_left,
+       const sensor_msgs::CameraInfoConstPtr &cameraInfo_right, const  ros::Time &sensor_timestamp){
+		debug_pub_.publish(imageLeft_cv, imageRight_cv, cameraInfo_left, cameraInfo_right, sensor_timestamp);
 	}
 
 protected:
@@ -88,6 +112,8 @@ protected:
 		twist_covariance_[21] = twist_covariance_[28] = twist_covariance_[35] = rCov;
 	}
 
+	
+
 	void integrateAndPublish(const Eigen::Affine3d &delta_transform, const uint64_t time_curr, const uint64_t time_pre)
 	{
 
@@ -95,12 +121,15 @@ protected:
 		// sanity check
 		assert(time_pre > 0 && time_curr > time_pre); // negative time change in incoming sensor data!
 
-		assert(time_curr < time_pre + 2*1e9); // timestamps between frames larger than 2 seconds!
+		if (time_curr > time_pre + 1*1e9){ // timestamps between frames larger than 1 second!
+			ROS_ERROR_STREAM("Detect big time difference between VO frames");
+			return; // abort publish
+		} 
 
 		if ( global_start_ != 0 && global_start_ > time_pre )
 		{
-			ROS_WARN_STREAM("[odometer] EKF initiated, but ignorning frames before global start time : " << time_pre);
-			// do_publish_for_ekf = false;
+			ROS_WARN_STREAM("EKF initiated, but ignorning frames before global start time : " << ros::Time().fromNSec(time_pre));
+			return;
 		}
 
 		//// HM: the integrated pose is with respect to the left camera center ////
@@ -115,122 +144,120 @@ protected:
 		// delta_transform consist of active rotation matrix of frames t-1 to t
 
 		// change of base from current -> previous, then from previous to time 0
-		integrated_vo_pose_ = integrated_vo_pose_ * delta_transform; // HM: behave like matrix multiplication in homogenous coordinates
-		geometry_msgs::Pose integrated_vo_pose_msg = tf2::toMsg(integrated_vo_pose_);
 
-		
-		nav_msgs::Odometry odometry_msg;
-		odometry_msg.header.stamp = ros::Time().fromNSec(time_curr);
-		odometry_msg.header.frame_id = odom_frame_id_;  // this is the fixed "global" frame
-		odometry_msg.child_frame_id = base_link_frame_id_; // this is the reference body frame
-		odometry_msg.pose.pose = integrated_vo_pose_msg;
+		// attempt to initialise initial_imu_pose
+		// if (!isGlobalPoseEnabled){
+		// 	ros::NodeHandle nh;
+		// 	ROS_WARN_STREAM_THROTTLE(5,"Attempt to initialise integrated pose from " << initial_pose_topic);
+		// 	auto msgptr = ros::topic::waitForMessage<geometry_msgs::PoseWithCovarianceStamped>(initial_pose_topic,nh, ros::Duration(0.01)); // , ros::Duration(0.01)
 
-		// calculate twist (not possible for first run as no delta_t can be computed)
-		// tf2::Transform delta_base_transform = delta_transform ;
-		// double delta_t = (time_curr - time_pre).toSec();
-		// if (!time_pre.isZero())
-		// {
-			
-		// 	if (delta_t)
-		// 	{
-		// 	odometry_msg.twist.twist.linear.x = delta_base_transform.getOrigin().getX() / delta_t;
-		// 	odometry_msg.twist.twist.linear.y = delta_base_transform.getOrigin().getY() / delta_t;
-		// 	odometry_msg.twist.twist.linear.z = delta_base_transform.getOrigin().getZ() / delta_t;
-		// 	tf2::Quaternion delta_rot = delta_base_transform.getRotation();
-		// 	tf2Scalar angle = delta_rot.getAngle();
-		// 	tf2::Vector3 axis = delta_rot.getAxis();
-		// 	tf2::Vector3 angular_twist = axis * angle / delta_t;
-		// 	odometry_msg.twist.twist.angular.x = angular_twist.x();
-		// 	odometry_msg.twist.twist.angular.y = angular_twist.y();
-		// 	odometry_msg.twist.twist.angular.z = angular_twist.z();
-		// 	}
 		// }
-
-		odometry_msg.pose.covariance = pose_covariance_; // pose_covariance_ is defined outside
-		// odometry_msg.twist.covariance = twist_covariance_;
-		odom_pub_.publish(odometry_msg);
-
-		// bag.write("odometry_msg",ros::Time::now(),odometry_msg);
-
-		//////////////////////////////////
-		// STEP 2, publish visual odometry (pose)
-		//////////////////////////////////
-		geometry_msgs::PoseWithCovarianceStamped pose_msg;
-		pose_msg.header = odometry_msg.header;
-		pose_msg.pose.covariance = pose_covariance_;
-		pose_msg.pose.pose = integrated_vo_pose_msg;
-
-		pose_pub_.publish(pose_msg);
-
-		bag.write("pose_msg",ros::Time::now(),odometry_msg);
-
-
-		//////////////////////////////////
-		// STEP 3, publish world frame pose estimate (for EKF)
-		//////////////////////////////////
-
 		
-
-		// if ( do_publish_for_ekf )
-		// {
-		// 	tf2::Transform world_transform = world_to_base * base_to_sensor * delta_transform * base_to_sensor.inverse();
-		// 	if (!_change_delta_pose_to_velocity)
-		// 	{
-		// 		//ROS_INFO_STREAM( "world_to_base: " << world_to_base_msg);
-		// 		// read from left to right, base_to_sensor.inverse() assume slow changing calibration
-		// 		 // * base_to_sensor.inverse()
-		// 		geometry_msgs::PoseWithCovarianceStamped pose_iw_msg;
-		// 		pose_iw_msg.header.stamp = time_curr;
-		// 		pose_iw_msg.header.frame_id = "world_frame";
-		// 		pose_iw_msg.pose.covariance = twist_covariance_;
-
-		// 		// std::cout << "origin:" <<  world_transform.getOrigin()  << std::endl;
-		// 		// std::cout << "rotation:" <<  world_transform.getRotation()  << std::endl;
-		// 		tf2::toMsg(world_transform, pose_iw_msg.pose.pose);	
-		// 		pose_iw_pub_.publish(pose_iw_msg);
-
-		// 		ROS_INFO_STREAM("[DELTA POSE] EKF Measurement Published! cov:" << twist_covariance_[0]) ;
-		// 	}else if (delta_t > 0.0)
-		// 	{
-		// 		geometry_msgs::PoseWithCovarianceStamped pose_i_msg;
-		// 		tf2::toMsg(world_transform, pose_i_msg.pose.pose); // we only preserve the rotation part of the pose
-
-		// 		tf2::Transform imu_transform = base_to_sensor * delta_transform * base_to_sensor.inverse();
-		// 		tf2::Transform imu_t1_to_t2;
-		// 		imu_t1_to_t2.setIdentity();
-		// 		imu_t1_to_t2.setRotation(imu_transform.getRotation());
-
-		// 		imu_transform = imu_t1_to_t2.inverse() * imu_transform;
-		// 		pose_i_msg.pose.pose.position.x = imu_transform.getOrigin().getX() / delta_t;
-		// 		pose_i_msg.pose.pose.position.y = imu_transform.getOrigin().getY() / delta_t;
-		// 		pose_i_msg.pose.pose.position.z = imu_transform.getOrigin().getZ() / delta_t;
-		// 		pose_i_msg.header.stamp = time_curr;//time_pre + (time_curr - time_pre)*0.5;
-		// 		pose_i_msg.header.frame_id = "imu_frame";
-		// 		pose_i_msg.pose.covariance = twist_covariance_;
-
-		// 		pose_iw_pub_.publish(pose_i_msg);
-		// 		ROS_INFO_STREAM("[VELOCITY] EKF Measurement Published! cov:" << twist_covariance_[0]);
-		// 	}
+		if (isGlobalPoseEnabled)
+		{
+			assert(!initial_imu_pose.matrix().isZero());
+			integrated_vo_pose_ = integrated_vo_pose_ * delta_transform; // HM: behave like matrix multiplication in homogenous coordinates
 			
-		// }
+			Eigen::Affine3d integrated_p_iw = initial_imu_pose * Tr_ci * integrated_vo_pose_;
 
-		// tf_broadcaster_.sendTransform(tf::StampedTransform(base_transform, time_curr,
-		// 	odom_frame_id_, base_link_frame_id_));
+			geometry_msgs::Pose integrated_vo_pose_msg = tf2::toMsg(integrated_p_iw);
+
+			
+			nav_msgs::Odometry odometry_msg;
+			odometry_msg.header.stamp = ros::Time().fromNSec(time_curr);
+			odometry_msg.header.frame_id = odom_frame_id_;  // this is the fixed "global" frame
+			odometry_msg.child_frame_id = base_link_frame_id_; // this is the reference body frame
+			odometry_msg.pose.pose = integrated_vo_pose_msg;
+			odometry_msg.pose.covariance = pose_covariance_; // pose_covariance_ is defined outside
+			// odometry_msg.twist.covariance = twist_covariance_;
+			odom_pub_.publish(odometry_msg);
+
+			// bag.write("odometry_msg",ros::Time::now(),odometry_msg);
+
+			//////////////////////////////////
+			// STEP 2, publish visual odometry (pose)
+			//////////////////////////////////
+			geometry_msgs::PoseWithCovarianceStamped pose_msg;
+			pose_msg.header = odometry_msg.header;
+			pose_msg.pose.covariance = pose_covariance_;
+			pose_msg.pose.pose = integrated_vo_pose_msg;
+
+			pose_pub_.publish(pose_msg);
+
+			// bag.write("pose_msg",ros::Time::now(),odometry_msg);
+
+		} // end of publishing integrated pose / odometry
+
+		//// Also publish the corresponding velocity
+		double delta_t = (time_curr - time_pre) / 1.0e9;
+		assert (delta_t > 0);
+		Eigen::Vector3d delta_translation = delta_transform.translation();
+		delta_translation /= delta_t;
+
+		geometry_msgs::PoseWithCovarianceStamped velocity_pose_msg;
+		velocity_pose_msg.pose.pose.position.x = delta_translation(0);
+		velocity_pose_msg.pose.pose.position.y = delta_translation(1);
+		velocity_pose_msg.pose.pose.position.z = delta_translation(2);
+
+		velocity_pose_msg.pose.covariance = pose_covariance_;
+
+		velocity_pose_msg.header.frame_id = "camera_frame";
+		velocity_pose_msg.header.stamp = ros::Time().fromNSec((time_curr + time_pre)/2);
+		vel_pub_.publish(velocity_pose_msg);
+
 	}
 
-
-	bool resetPose(std_srvs::Empty::Request&, std_srvs::Empty::Response&)
+	void resetPose()
+	// bool resetPose(std_srvs::Empty::Request&, std_srvs::Empty::Response&)
 	{
 		integrated_vo_pose_.setIdentity();
 		pose_covariance_.assign(0.0);
 		twist_covariance_.assign(0.0);
 		global_start_ = ros::Time::now().toNSec();
-		// isEKFEnabled = true;
 
-		ROS_INFO("==========Request to Reset Pose, Completed==============");
-		ROS_INFO_STREAM("==============Global Start Time: " << global_start_ <<"==============");
-		// ROS_WARN_STREAM("EKF Output Mode Changed to " << (isEKFEnabled ?  "Enabled." : "Disabled.") );
-		return true;
+		if (use_ekf_pose_as_initial){
+			ROS_WARN("Will wait for EKF initial pose, before publishing odometry and pose");
+			isGlobalPoseEnabled = false;
+		}else{
+			ROS_WARN("Will use ENU as initial pose, publishing odometry and pose");
+			isGlobalPoseEnabled = true;
+			initial_imu_pose.setIdentity();
+			Eigen::Matrix3d R_sw;
+			R_sw << -1, 0 ,0,
+					0, 1, 0,
+					0 , 0 , -1;
+			initial_imu_pose.rotate(R_sw);
+		}
+	}
+
+	void loadCameraImuTransform(){
+
+		ros::NodeHandle local_nh("~");
+		Eigen::Quaternion<double> q_ci;
+		ROS_ASSERT(local_nh.getParam("init/q_ci/w", q_ci.w()));
+		ROS_ASSERT(local_nh.getParam("init/q_ci/x", q_ci.x()));
+		ROS_ASSERT(local_nh.getParam("init/q_ci/y", q_ci.y()));
+		ROS_ASSERT(local_nh.getParam("init/q_ci/z", q_ci.z()));
+
+		Tr_ci.setIdentity();
+		Tr_ci.rotate(q_ci);
+		// Tr_ci.translation().setZero();
+
+		ROS_INFO_STREAM(std::endl << "camera-imu transformation loaded Tr_ci:" << Tr_ci.matrix());
+	}
+
+	void ekfCallback(const geometry_msgs::PoseWithCovarianceStampedConstPtr &msgptr){
+		if (isGlobalPoseEnabled == true)
+			return;
+		
+		Eigen::Quaternion<double> q_iw = {msgptr->pose.pose.orientation.w, msgptr->pose.pose.orientation.x, 
+					msgptr->pose.pose.orientation.y, msgptr->pose.pose.orientation.z};
+		
+		initial_imu_pose.setIdentity();
+		initial_imu_pose.rotate(q_iw);
+		ROS_WARN_STREAM("Initialise integrated pose using " << std::endl << initial_imu_pose.matrix() );
+
+		isGlobalPoseEnabled = true;
 	}
 
 };

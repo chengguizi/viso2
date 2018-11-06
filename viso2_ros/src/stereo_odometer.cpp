@@ -172,6 +172,27 @@ protected:
 			mode = Viso2Eigen::Mode::USE_OLD_FRAME;
 		else
 			mode = Viso2Eigen::Mode::NO_USE_OLD_FRAME;
+
+		////////////// CHECK FOR JITTER /////////////////////
+		static ros::Time last_frame_time = ros::Time(0);
+		static double avg_time_gap = 0;
+
+		if (!last_frame_time.isZero()){
+			double delta_t = (cvImage_l->header.stamp - last_frame_time).toSec();
+			if (avg_time_gap == 0)
+				avg_time_gap = delta_t;
+				
+
+			double jitter = delta_t - avg_time_gap;
+			if (std::abs(jitter/avg_time_gap) > 0.3){
+				ROS_ERROR_STREAM("Jitter Detected: average_gap=" << avg_time_gap << ", but current=" << delta_t);
+				mode = Viso2Eigen::Mode::FIRST_FRAME;
+			}else
+				avg_time_gap = avg_time_gap*0.95 + delta_t*0.05;
+		}
+
+		last_frame_time = cvImage_l->header.stamp;
+		/////////////////////////////////////////////////////
 		
 		if (mode != Viso2Eigen::Mode::FIRST_FRAME) profiler.profile("viso->process");
 		bool viso2_result = viso2->process(cv_leftImg_source, cv_rightImg_source, mode, cvImage_l->header.stamp.toNSec() );

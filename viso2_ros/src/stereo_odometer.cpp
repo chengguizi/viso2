@@ -212,6 +212,7 @@ protected:
 			// we still want visualisation
 			getVisualisation(outImg, outImg_right);
 			publishDebugImg(outImg,outImg_right,l_info_msg,r_info_msg,cvImage_l->header.stamp);
+			voState.reference_motion = Eigen::Affine3d::Identity();
 			return;
 		}
 
@@ -272,8 +273,13 @@ protected:
 		//////////////////////////////////////
 
 		std::vector<int> inliers = viso2->getInlier();
+		double I = inliers.size();
+		int matched_size = viso2->getMatchedSize();
+		double area = viso2->getArea();
 
-		double variance = 1.0 / std::pow(inliers.size(),3);
+		double image_area = param.sme_param.image_height * param.sme_param.image_width;
+
+		double variance = std::pow(I/2.0,-3)*(image_area/area);
 
 		std::cout << "variance = " << variance << std::endl;
 
@@ -299,6 +305,8 @@ protected:
 			std::cerr << "process() FAILED" << std::endl;
 			voState.tfStamped[state_idx].lost = true;
 			voState.tfStamped[state_idx_next].use_old_reference_frame = false;
+			// possible bug? must add the line below
+			voState.reference_motion = Eigen::Affine3d::Identity();
 			
 			outImg = cv_leftImg_source;
 			outImg_right = cv_rightImg_source;

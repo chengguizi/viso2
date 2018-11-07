@@ -14,14 +14,14 @@
 		<!-- QuadMatcher -->
 		<param name="number_of_buckets_in_width" type="int" value="8" />
 		<param name="number_of_buckets_in_height" type="int" value="8" />
-		<param name="epipolar_tolerance" type="double" value="10" />
+		<param name="epipolar_tolerance" type="double" value="6" />
 		<param name="max_neighbor_ratio" type="double" value="0.7" />
 		<param name="use_bucketing" type="bool" value="true" /> 
 		<param name="compulte_scaled_keys" type="bool" value="true" /> 
 
 		<!-- StereoMotionEstimator -->
 		<param name="ransac_iters" type="int" value="400" />
-		<param name="inlier_threshold" type="double" value="10.0" />
+		<param name="inlier_threshold" type="double" value="7.0" />
 		<param name="inlier_ratio_min" type="double" value="0.5" />
 		<param name="reweighting" type="bool" value="true" />
 

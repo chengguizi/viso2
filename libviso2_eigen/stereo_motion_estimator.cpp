@@ -12,6 +12,9 @@
 
 #include "stereo_motion_estimator.h"
 
+#include <cmath>
+#include "opencv2/imgproc/imgproc.hpp"
+
 /////////////////////////////////////////////////////////////////////////////////
 //// Implementation of Public Member Functions
 /////////////////////////////////////////////////////////////////////////////////
@@ -72,6 +75,28 @@ bool StereoMotionEstimator::updateMotion () {
 	return true;
 }
 
+inline double getContourArea(const std::vector<cv::Point2f> &pts){
+
+	if (pts.size()<3)
+		return 0;
+
+	// Calculating the convex Hull
+	// std::vector<cv::Point2f> hull;
+	return contourArea(pts);
+	
+	// double area = 0;
+	// int N = hull.size();
+
+	// for (int i = 0 ; i < N - 1 ; i++){
+	// 	area += hull[i].x*hull[i+1].y - hull[i].y*hull[i+1].x;
+	// }
+
+	// area += hull[N-1].x*hull[0].y - hull[N-1].y*hull[0].x;
+
+	// area/=2.0;
+	// return area;
+}
+
 
 /////////////////////////////////////////////////////////////////////////////////
 //// Implementation of Private Member Functions
@@ -82,6 +107,7 @@ std::vector<double> StereoMotionEstimator::estimateMotion()
 
 	this->result.tr_delta.clear();
 	this->result.inliers.clear();
+	this->result.area = 0;
 
 	// compute minimum distance for RANSAC samples
 	float width_max = 0, height_max = 0;
@@ -89,9 +115,9 @@ std::vector<double> StereoMotionEstimator::estimateMotion()
 
 	// Sanity check for number of matches
 	const int N = matches_quad_vec->size();
-    if (N < 6)
+    if (N < 10)
     {
-        std::cerr << "Total poll of matches is too small, aborting viso: " << N << std::endl;
+        std::cerr << "Total poll of matches is too small < " << N << ", aborting viso: " << N << std::endl;
         return std::vector<double>();
     }
 
@@ -123,6 +149,7 @@ std::vector<double> StereoMotionEstimator::estimateMotion()
 
 	// clear vectors
 	std::vector<int> inliers;
+	double area = 0;
     X.resize(N);
     Y.resize(N);
     Z.resize(N);
@@ -260,13 +287,25 @@ std::vector<double> StereoMotionEstimator::estimateMotion()
         if (result == FAILED)
             continue;
 
+		
+
 		// Update best inlier buffer if we have more inliers
         std::vector<int> inliers_curr = getInlier(tr_delta_curr);
-        if (inliers_curr.size() > inliers.size())
+
+		// calculate area obtained by the current inliers
+		std::vector<cv::Point2f> pts;
+		for (auto idx : inliers_curr){
+			pts.push_back( (*keyl2_vec) [ (*matches_quad_vec)[idx][L2] ].pt );
+		}
+
+		double area_curr = std::sqrt(getContourArea(pts));
+
+        if (inliers_curr.size()*area_curr > inliers.size()*area)
         {
             inliers = inliers_curr;
             tr_delta = tr_delta_curr;
 			best_active = active;
+			area = area_curr;
         }
 
         // std::cout << "inlier: " << inliers_curr.size() << " out of " << N << std::endl;
@@ -348,8 +387,10 @@ std::vector<double> StereoMotionEstimator::estimateMotion()
 
 	this->result.tr_delta = tr_delta;
 	this->result.inliers = getInlier(tr_delta);
+	this->result.area = area*area;
 	
 	std::cout << "inliers.size()= " << inliers.size() << " , this->result.inliers.size()= " << this->result.inliers.size() << std::endl;
+	std::cout << "this->result.area=" << this->result.area << std::endl;
 	assert( this->result.inliers.size() < 10 || this->result.inliers.size() >= inliers.size()*0.7);
 	
 	return tr_delta;
@@ -556,7 +597,7 @@ void StereoMotionEstimator::computeResidualsAndJacobian(const std::vector<double
 		// weighting   hm: (centre points are given up to 20x of weight, only in x-axis)
 		double weight = 1.0;
 		if (param.reweighting)
-			weight = 1.0 / (fabs(p_observe[4 * i + 0] - _cu) / fabs(_cu) + 0.05);   // only for current left image
+			weight = 1.0 / (fabs(p_observe[4 * i + 0] - _cu) / fabs(_cu) + 0.5);   // only for current left image
 
 		// compute 3d point in current right coordinate system
 		double X2c = X1c - param.calib.baseline;

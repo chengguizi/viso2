@@ -59,6 +59,8 @@ public:
 	// The matrix Tr_delta.inverse() can be interpreted as the attitude of current frame w.r.t. previous frame 
 	Eigen::Affine3d getCameraMotion() { return result.Tr_delta.inverse(); } 
 
+    double getArea(){ return result.area; }
+
     // deconstructor
 	~StereoMotionEstimator() {}
 
@@ -80,6 +82,7 @@ private:
         Eigen::Affine3d Tr_delta; // TR transform in homogenous matrix form
 
         std::vector<int> inliers; // index of all inliers
+        double area;
     };
 
     void                 computeObservations(const std::vector<int> &active, bool inlier_mode = false);

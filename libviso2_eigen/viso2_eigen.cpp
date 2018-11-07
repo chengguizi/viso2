@@ -244,6 +244,7 @@ bool Viso2Eigen::process(const cv::Mat& leftImage, const cv::Mat& rightImage, Vi
 
 Eigen::Affine3d Viso2Eigen::getCameraMotion() {return sme->getCameraMotion();}
 std::vector<int> Viso2Eigen::getInlier() {return sme->getInlier();}
+double Viso2Eigen::getArea(){return sme->getArea(); }
 
 double Viso2Eigen::computeOpticalFlow(){
 

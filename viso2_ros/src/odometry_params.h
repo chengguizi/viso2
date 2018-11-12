@@ -51,6 +51,7 @@ namespace viso2_ros
 		ROS_ASSERT(local_nh.getParam("epipolar_tolerance", 				params.epipolar_tolerance));
 		ROS_ASSERT(local_nh.getParam("max_neighbor_ratio",            	params.max_neighbor_ratio));
 		ROS_ASSERT(local_nh.getParam("use_bucketing",        			params.use_bucketing));
+		ROS_ASSERT(local_nh.getParam("max_features_per_bucket",        			params.max_features_per_bucket));
 		ROS_ASSERT(local_nh.getParam("compulte_scaled_keys",        	params.compulte_scaled_keys));
 	}
 

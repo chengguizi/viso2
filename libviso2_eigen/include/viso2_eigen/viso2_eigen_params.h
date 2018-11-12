@@ -14,6 +14,7 @@ namespace QuadMatcherParam{
         int epipolar_tolerance = 10;
         double max_neighbor_ratio = 0.6;
         bool use_bucketing= true;
+        int max_features_per_bucket = 50;
         bool compulte_scaled_keys = false;
 
         // This will be set automatically, do not change

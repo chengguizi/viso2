@@ -459,7 +459,7 @@ void QuadMatcher<TDescriptor, TFeature>::updateMatchList(
         auto it = matches.begin();
         while(it != matches.end())
         {
-            int i = (*it)[matches_source];
+            int i = (*it)[matches_source]; // iterated index of current keypoints / descriptors
 
             const TDescriptor &des = (*des_sources)[i];
             const cv::KeyPoint &key = (*key_sources)[i];

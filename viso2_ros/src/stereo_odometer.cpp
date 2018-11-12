@@ -278,8 +278,11 @@ protected:
 		double area = viso2->getArea();
 
 		double image_area = param.sme_param.image_height * param.sme_param.image_width;
+		double delta_t = (voState.tfStamped[state_idx].stamp - voState.tfStamped[state_idx-1].stamp)/1.0e9;
 
-		double variance = std::pow(I/2.0,-3)*(image_area/area);
+		double variance = std::pow(matched_size/I,6)*(image_area/area) / std::sqrt(I) * delta_t ;
+
+		// double variance = std::pow(I/2.0,-2)*(image_area/area);
 
 		std::cout << "variance = " << variance << std::endl;
 

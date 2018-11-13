@@ -20,6 +20,7 @@
 #include <vector>
 #include <list>
 #include <array>
+#include <algorithm>
 
 // implementation
 #include <iostream>
@@ -40,6 +41,8 @@ public:
     QuadMatcher();
 
     void setParam(QuadMatcherParam::Parameters &param);
+
+    void bucketKeyPoints(std::vector<cv::KeyPoint> &key, double scale=1.0);
 
     void pushBackData(const std::vector<cv::KeyPoint> &keyl1, const std::vector<cv::KeyPoint> &keyl2, 
                             const std::vector<cv::KeyPoint> &keyr1, const std::vector<cv::KeyPoint> &keyr2,
@@ -78,7 +81,8 @@ private:
                                                     const std::vector< std::vector<int> > &bucket,
                                                     const HorizontalConstraint constraint);
     void createBucketIndices(const std::vector<cv::KeyPoint> *keys , 
-                                std::vector< std::vector<int> > &bucket);
+                                std::vector< std::vector<int> > &bucket,
+                                double scale = 1.0);
 
     
 
@@ -141,6 +145,51 @@ void QuadMatcher<TDescriptor, TFeature>::setParam(QuadMatcherParam::Parameters &
     
     this->param = param;
     initialised = true;
+}
+
+bool cmpResponse(cv::KeyPoint i, cv::KeyPoint j){
+    return i.response > j.response;
+}
+
+template<class TDescriptor, class TFeature>
+void QuadMatcher<TDescriptor, TFeature>::bucketKeyPoints(std::vector<cv::KeyPoint> &key, double scale){
+
+    const size_t Nmax = param.max_features_per_bucket;
+
+    if (Nmax == 0) // feature disabled
+        return;
+
+    std::vector<cv::KeyPoint> result_key;
+
+    std::vector< std::vector<int> > bucket(param.n_bucket_width * param.n_bucket_height);
+
+    createBucketIndices(&key, bucket, scale);
+
+    size_t total_key = 0;
+    for (size_t i =0; i < bucket.size(); i++){
+
+        std::vector<cv::KeyPoint> bucket_key;
+
+        // for each index in the bucket, add the key to a temporary vector for sorting
+        for ( int idx : bucket[i]){
+            bucket_key.push_back(key[idx]);
+        }
+
+        total_key += bucket_key.size();
+
+        // sort process
+        std::sort(bucket_key.begin(),bucket_key.end(), cmpResponse);
+
+        int upper_limit = std::min(Nmax,bucket_key.size());
+
+        result_key.insert(result_key.end(),bucket_key.begin(),bucket_key.begin() + upper_limit);
+    }
+
+    assert(total_key == key.size());
+
+    std::cout << "Bucketing KeyPoints from " << total_key << " to " << result_key.size() << std::endl;
+
+    key = result_key;
 }
 
 // l1 - previous left (match), l2 current left (query)
@@ -316,7 +365,8 @@ std::vector<int> QuadMatcher<TDescriptor, TFeature>::getEpipolarBucketPoints(
 
 template<class TDescriptor, class TFeature>
 void QuadMatcher<TDescriptor, TFeature>::createBucketIndices(const std::vector<cv::KeyPoint> *keys , 
-                                                    std::vector< std::vector<int> > &bucket) {
+                                                    std::vector< std::vector<int> > &bucket,
+                                                    double scale) {
     
     
     assert ( (int)bucket.size() == param.n_bucket_width * param.n_bucket_height);
@@ -329,7 +379,7 @@ void QuadMatcher<TDescriptor, TFeature>::createBucketIndices(const std::vector<c
     for (size_t i = 0 ; i < keys->size() ; i++)
     {
         const cv::KeyPoint &key = (*keys)[i];
-        int idx = getBucketIndex(key.pt.x, key.pt.y);
+        int idx = getBucketIndex(key.pt.x*scale, key.pt.y*scale);
         bucket[idx].push_back(i);
     }
 

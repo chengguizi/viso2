@@ -73,6 +73,11 @@ bool Viso2Eigen::process(const cv::Mat& leftImage, const cv::Mat& rightImage, Vi
         cv::FAST(leftImage, keys_l2, fast_th, /*nonmaxSuppression=*/ true);
         cv::FAST(rightImage, keys_r2, fast_th, /*nonmaxSuppression=*/ true);
 
+
+        qm->bucketKeyPoints(keys_l2);
+
+        qm->bucketKeyPoints(keys_r2);
+
         auto extractor = cv::xfeatures2d::BriefDescriptorExtractor::create(/*int 	bytes = 32, bool 	use_orientation = false*/);
 
         // auto extractor = cv::ORB::create(1000);
@@ -97,6 +102,9 @@ bool Viso2Eigen::process(const cv::Mat& leftImage, const cv::Mat& rightImage, Vi
             cv::resize(rightImage, rightImage_half, cv::Size(), scale, scale);
             cv::FAST(leftImage_half, keys_l2_half, fast_th, /*nonmaxSuppression=*/ true);
             cv::FAST(rightImage_half, keys_r2_half, fast_th, /*nonmaxSuppression=*/ true);
+
+            qm->bucketKeyPoints(keys_l2_half,1/scale);
+            qm->bucketKeyPoints(keys_r2_half,1/scale);
 
             std::vector <bitset> des_l2_half, des_r2_half;
             descriptors.release();

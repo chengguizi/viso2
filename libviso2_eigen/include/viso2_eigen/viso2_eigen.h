@@ -61,6 +61,8 @@ public:
         image = this->outImg;
         image_right = this->outImg_right;
     }
+
+    bool isCurrentFrameFeatureValid(){return current_frame_feature_valid;}
     
 
 private:
@@ -82,6 +84,8 @@ private:
     cv::Mat outImg, outImg_right;
 
     bool compulte_scaled_keys;
+
+    bool current_frame_feature_valid;
 
 };
 

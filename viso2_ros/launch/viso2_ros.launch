@@ -21,9 +21,9 @@
 		<param name="compulte_scaled_keys" type="bool" value="true" /> 
 
 		<!-- StereoMotionEstimator -->
-		<param name="ransac_iters" type="int" value="400" />
-		<param name="inlier_threshold" type="double" value="7.0" />
-		<param name="inlier_ratio_min" type="double" value="0.5" />
+		<param name="ransac_iters" type="int" value="250" />
+		<param name="inlier_threshold" type="double" value="5.0" />
+		<param name="inlier_ratio_min" type="double" value="0.6" />
 		<param name="reweighting" type="bool" value="true" />
 
 		<!-- Stereo Odometry Main Class -->

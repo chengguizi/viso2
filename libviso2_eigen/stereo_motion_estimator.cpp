@@ -115,7 +115,7 @@ std::vector<double> StereoMotionEstimator::estimateMotion()
 
 	// Sanity check for number of matches
 	const int N = matches_quad_vec->size();
-    if (N < 10)
+    if (N < 8)
     {
         std::cerr << "Total poll of matches is too small < " << N << ", aborting viso: " << N << std::endl;
         return std::vector<double>();
@@ -306,6 +306,14 @@ std::vector<double> StereoMotionEstimator::estimateMotion()
             tr_delta = tr_delta_curr;
 			best_active = active;
 			area = area_curr;
+
+			// condition for early break, because the accuracy is high enough e.g. > 90%
+			double k = 0.95;
+			if (inliers.size() > k*N)
+			{
+				std::cout << "RANSAC Early Termination: Found accuracy: " << inliers.size() / (double)N << std::endl;
+				break;
+			}
         }
 
         // std::cout << "inlier: " << inliers_curr.size() << " out of " << N << std::endl;

@@ -36,6 +36,7 @@ void Viso2Eigen::setParam(int image_width, int image_height,
 
 bool Viso2Eigen::process(const cv::Mat& leftImage, const cv::Mat& rightImage, Viso2Eigen::Mode mode, uint64_t stamp){
 
+    current_frame_feature_valid = false;
     //////////////////////////////
     //// STEP 1: Mode Logics to keep or throw away old frames
     //////////////////////////////
@@ -69,7 +70,7 @@ bool Viso2Eigen::process(const cv::Mat& leftImage, const cv::Mat& rightImage, Vi
         auto begin = std::chrono::steady_clock::now();
 
 
-        const int fast_th = 20; // corner detector response threshold
+        const int fast_th = 25; // corner detector response threshold
         cv::FAST(leftImage, keys_l2, fast_th, /*nonmaxSuppression=*/ true);
         cv::FAST(rightImage, keys_r2, fast_th, /*nonmaxSuppression=*/ true);
 
@@ -92,7 +93,7 @@ bool Viso2Eigen::process(const cv::Mat& leftImage, const cv::Mat& rightImage, Vi
         extractor->compute(rightImage, keys_r2, descriptors);
         mat2Bitset(descriptors, des_r2);
 
-        if (compulte_scaled_keys)
+        if ( (keys_l2.size() + keys_r2.size() / 2.0) < 80 && compulte_scaled_keys)
         {
             cv::Mat leftImage_half, rightImage_half;
             std::vector< cv::KeyPoint > keys_l2_half, keys_r2_half;
@@ -153,6 +154,10 @@ bool Viso2Eigen::process(const cv::Mat& leftImage, const cv::Mat& rightImage, Vi
         // std::cout << "des_r2.size()=" << des_r2.size() << ", descriptors.rows=" << descriptors.rows <<std::endl;
         // assert(des_r2.size() == descriptors.rows);
 
+        if ( keys_l2.size() > 10 && keys_r2.size() > 10){
+            current_frame_feature_valid = true;
+        }
+
         auto end = std::chrono::steady_clock::now();
 
         std::cout << "Calc Keys & Descriptors = " 
@@ -196,18 +201,22 @@ bool Viso2Eigen::process(const cv::Mat& leftImage, const cv::Mat& rightImage, Vi
 
     if (qm_result){
 
-        auto begin = std::chrono::steady_clock::now();
-
         qm->getMatchesQuad(matches_quad_vec);
 
-        // previous left --> current left --> current right --> previous right
-        sme->pushBackData(matches_quad_vec, keys_l1, keys_l2,
-            keys_r2, keys_r1);
+        bool sme_result = false;
+        auto begin = std::chrono::steady_clock::now();
+        if (matches_quad_vec.size() < 10)
+        {
+            std::cerr << "Total poll of matches is too small < " << matches_quad_vec.size() << ", waiting for the next frame " << std::endl;
+        }else{
+            
+             // previous left --> current left --> current right --> previous right
+            sme->pushBackData(matches_quad_vec, keys_l1, keys_l2,
+                keys_r2, keys_r1);
 
-        bool sme_result = sme->updateMotion();
-
+            sme_result = sme->updateMotion();
+        }       
         auto end = std::chrono::steady_clock::now();
-
         std::cout << "Calc updateMotion = " 
             << std::chrono::duration_cast<std::chrono::milliseconds>(end - begin).count() << "ms" <<std::endl;
 

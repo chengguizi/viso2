@@ -280,7 +280,13 @@ protected:
 		double image_area = param.sme_param.image_height * param.sme_param.image_width;
 		double delta_t = (voState.tfStamped[state_idx].stamp - voState.tfStamped[state_idx-1].stamp)/1.0e9;
 
-		double variance = std::pow(matched_size/I,6)*(image_area/area) / std::sqrt(I) * delta_t ;
+		double variance;
+		if (I <= 3)
+			variance = 9999;
+		else
+		 	variance = 0.03 * std::pow(matched_size/I,5)*(image_area/(image_area*0.05+area)) / std::sqrt(I) * std::sqrt(delta_t) ;
+
+		variance = std::max(0.005, variance);
 
 		// double variance = std::pow(I/2.0,-2)*(image_area/area);
 
@@ -306,8 +312,13 @@ protected:
 
 		}else{
 			std::cerr << "process() FAILED" << std::endl;
-			voState.tfStamped[state_idx].lost = true;
 			voState.tfStamped[state_idx_next].use_old_reference_frame = false;
+			if (viso2->isCurrentFrameFeatureValid()){
+				std::cout << "Current Frame Feature Extraction is valid." << std::endl;
+				voState.tfStamped[state_idx].stamp = cvImage_l->header.stamp.toNSec();
+				voState.tfStamped[state_idx].tf = Eigen::Affine3d::Identity();
+			}else
+				voState.tfStamped[state_idx].lost = true;
 			// possible bug? must add the line below
 			voState.reference_motion = Eigen::Affine3d::Identity();
 			

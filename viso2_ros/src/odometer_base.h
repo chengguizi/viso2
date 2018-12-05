@@ -95,7 +95,14 @@ public:
 
 	void publishDebugImg(const cv::Mat &imageLeft_cv,const  cv::Mat &imageRight_cv,const  sensor_msgs::CameraInfoConstPtr &cameraInfo_left,
        const sensor_msgs::CameraInfoConstPtr &cameraInfo_right, const  ros::Time &sensor_timestamp){
-		debug_pub_.publish(imageLeft_cv, imageRight_cv, cameraInfo_left, cameraInfo_right, sensor_timestamp);
+		
+		static ros::Time last_stamp = ros::Time(0);
+
+		if (last_stamp.isZero() || (sensor_timestamp - last_stamp).toSec() > 0.15 ){ // limit publishing rate
+			debug_pub_.publish(imageLeft_cv, imageRight_cv, cameraInfo_left, cameraInfo_right, sensor_timestamp);
+			last_stamp = sensor_timestamp;
+		}
+			
 	}
 
 protected:

@@ -431,6 +431,7 @@ template<class TDescriptor, class TFeature>
 int QuadMatcher<TDescriptor, TFeature>::findMatch( const std::vector<int> &inside_bucket, const TDescriptor &query,
                             const std::vector<TDescriptor> *targets )
 {
+    const double maximum_distance_ratio = 0.5;
     int best_dist_1 = 1e9;
     int best_dist_2 = 1e9;
     int best_i = -1;
@@ -460,7 +461,10 @@ int QuadMatcher<TDescriptor, TFeature>::findMatch( const std::vector<int> &insid
     // If the best match is much better than the second best, then it is most probably a good match (SNR good)
     if ( best_dist_1 / (double)best_dist_2 < param.max_neighbor_ratio)
     {
-        return best_i;
+        if (maximum_distance_ratio * query.size() > best_dist_1)
+            return best_i;
+        else
+            return -1; // even the best candidate has a distance too large
     }
     return -1;
 }

@@ -10,6 +10,11 @@
 
 #include <chrono>
 
+#define USE_FAST
+// #define USE_BRISK  // VERY SLOW
+// #define USE_ORB
+// #define USE_GFTT // SLOW
+
 Viso2Eigen::Viso2Eigen() :  initialised(false) , 
                     qm (new QuadMatcher<bitset,std::nullptr_t>()),
                     sme (new StereoMotionEstimator()){}
@@ -69,21 +74,37 @@ bool Viso2Eigen::process(const cv::Mat& leftImage, const cv::Mat& rightImage, Vi
     {
         auto begin = std::chrono::steady_clock::now();
 
+    #ifdef USE_FAST
+        //// USE FAST FEATURE DETECTOR
+        const int fast_th = 20; // corner detector response threshold
+        auto detector = cv::FastFeatureDetector::create(fast_th,true,cv::FastFeatureDetector::TYPE_9_16);
+        // cv::FAST(leftImage, keys_l2, fast_th, /*nonmaxSuppression=*/ true);
+        // cv::FAST(rightImage, keys_r2, fast_th, /*nonmaxSuppression=*/ true);
 
-        const int fast_th = 25; // corner detector response threshold
-        cv::FAST(leftImage, keys_l2, fast_th, /*nonmaxSuppression=*/ true);
-        cv::FAST(rightImage, keys_r2, fast_th, /*nonmaxSuppression=*/ true);
+        //// Alternatively, AGAST
+        // const int agast_threshold = 25;
+        // cv::AGAST(leftImage, keys_l2, agast_threshold); //  nonmaxSuppression = default true
+        // cv::AGAST(rightImage, keys_r2, agast_threshold); //  nonmaxSuppression = default true
+    #endif
+    #ifdef USE_BRISK
+        auto detector = cv::BRISK::create();
+    #endif
+    #ifdef USE_ORB
+        // nfeatures, nlevel, edgeThreshold, firstLevel, WTA_K, scoreType, patchSize, fastThreshold
+        auto detector = cv::ORB::create(500,1.2f,8,31,0,2,cv::ORB::FAST_SCORE,31,20);   
+    #endif
+    #ifdef USE_GFTT // SLOW!
+        auto detector = cv::GFTTDetector::create();
+    #endif
 
+        detector->detect(leftImage,keys_l2);
+        detector->detect(rightImage,keys_r2);
 
         qm->bucketKeyPoints(keys_l2);
-
         qm->bucketKeyPoints(keys_r2);
 
         auto extractor = cv::xfeatures2d::BriefDescriptorExtractor::create(/*int 	bytes = 32, bool 	use_orientation = false*/);
 
-        // auto extractor = cv::ORB::create(1000);
-        // extractor->detect(leftImage,keys_l2);
-        // extractor->detect(rightImage,keys_r2);
         
         cv::Mat descriptors;
         extractor->compute(leftImage, keys_l2, descriptors);
@@ -93,16 +114,19 @@ bool Viso2Eigen::process(const cv::Mat& leftImage, const cv::Mat& rightImage, Vi
         extractor->compute(rightImage, keys_r2, descriptors);
         mat2Bitset(descriptors, des_r2);
 
-        if ( (keys_l2.size() + keys_r2.size() / 2.0) < 80 && compulte_scaled_keys)
+
+    #ifdef USE_FAST
+        if ( (keys_l2.size() + keys_r2.size()) / 2.0 < 80 && compulte_scaled_keys)
         {
             cv::Mat leftImage_half, rightImage_half;
             std::vector< cv::KeyPoint > keys_l2_half, keys_r2_half;
 
-            const double scale = 0.25;
+            const double scale = 1.0/8.0;
             cv::resize(leftImage, leftImage_half, cv::Size(), scale, scale);
             cv::resize(rightImage, rightImage_half, cv::Size(), scale, scale);
-            cv::FAST(leftImage_half, keys_l2_half, fast_th, /*nonmaxSuppression=*/ true);
-            cv::FAST(rightImage_half, keys_r2_half, fast_th, /*nonmaxSuppression=*/ true);
+
+            detector->detect(leftImage_half,keys_l2_half);
+            detector->detect(rightImage_half,keys_r2_half);
 
             qm->bucketKeyPoints(keys_l2_half,1/scale);
             qm->bucketKeyPoints(keys_r2_half,1/scale);
@@ -143,7 +167,9 @@ bool Viso2Eigen::process(const cv::Mat& leftImage, const cv::Mat& rightImage, Vi
 
             des_l2.insert(des_l2.end(), des_l2_half.begin(), des_l2_half.end());
             des_r2.insert(des_r2.end(), des_r2_half.begin(), des_r2_half.end());
+
         }
+    #endif
 
         // std::cout<< "Left Features" << std::endl;
         // for (size_t i = 0; i<keys_l2.size();i++)

@@ -165,24 +165,34 @@ std::vector<double> StereoMotionEstimator::estimateMotion()
 
 	// project matches of previous image into 3d
 
+	// Count the number of short-mid range 3D points, as they give more information in motion estimation
+	int num_good_points = 0;
+	const double good_point_threshold = 0.5 * _f * param.calib.baseline;
+
 	for (size_t i = 0; i < (*matches_quad_vec).size() ; i++ )
 	{
 		const cv::KeyPoint &keyl1 = (*keyl1_vec)[ (*matches_quad_vec)[i][L1] ];
 		const cv::KeyPoint &keyr1 = (*keyr1_vec)[ (*matches_quad_vec)[i][R1] ];
 
-		if ( keyl1.pt.x - keyr1.pt.x < 0.0 )
-		{
-			std::cerr << "Warning: Flipped match at " << i << std::endl;
-		}
+		// if ( keyl1.pt.x - keyr1.pt.x < 0.0 )
+		// {
+		// 	std::cerr << "Warning: Flipped match at " << i << std::endl;
+		// }
 
 		double d = std::max( keyl1.pt.x - keyr1.pt.x, 0.0001f);			// d = xl - xr
 		X[i] = (keyl1.pt.x - _cu) * param.calib.baseline / d;				// X = (u1p - calib.cu)*baseline/d
 		Y[i] = (keyl1.pt.y - _cv) * param.calib.baseline / d;				// Y = (v1p - calib.cv)*baseline/d
 		Z[i] = _f * param.calib.baseline / d;									// Z = f*baseline/d
 
+		// accumulate count for good points
+		if (Z[i] < good_point_threshold)
+			num_good_points++;
 	}
 
-
+	if (num_good_points < 5)
+	{
+		std::cerr << "Warning: GOOD POINTS ARE TOO FEW (Majority of points are too far, compared to baseline)" << std::endl;
+	}
 
 	// loop variables
 	std::vector<double> tr_delta;				// yx: ransac: bestfit
@@ -200,13 +210,40 @@ std::vector<double> StereoMotionEstimator::estimateMotion()
 
 
         // Generate 3 points that satisfied the min_dist, in the previous left image
+		bool found_active = true;
 		for (int selection_iter = 0; ; selection_iter++)
 		{
+
+			if (selection_iter >= 50)
+            {
+                // std::cerr << "Finding RANSAC 3 matches > min_dist not possible..." << std::endl;
+				found_active = false;
+				break;
+                // return std::vector<double>();
+            }
+
 			active = getRandomSample(N, 3);
 
             int idx0 = (*matches_quad_vec)[ active[0] ][L1];
             int idx1 = (*matches_quad_vec)[ active[1] ][L1];
             int idx2 = (*matches_quad_vec)[ active[2] ][L1];
+
+
+			// Check if the sum of depth is not too big
+
+			// depth is always positive
+			double z0 = Z[active[0]];
+			double z1 = Z[active[1]];
+			double z2 = Z[active[2]];
+
+			const double maximum_depth_sum = 2.5 * _f * param.calib.baseline;
+			if ( (z0 + z1 + z2) > maximum_depth_sum)
+			{
+				// std::cout << "z0,z1,z2 = " << z0 << "," << z1 << "," << z2 << std::endl;
+				// std::cout << "maximum_depth_sum = " << maximum_depth_sum << std::endl;
+				continue;
+			}
+			
 
             const cv::Point2f pt0 = (*keyl1_vec)[idx0].pt;
             const cv::Point2f pt1 = (*keyl1_vec)[idx1].pt;
@@ -220,16 +257,15 @@ std::vector<double> StereoMotionEstimator::estimateMotion()
 			double y2 = (pt2.y - pt0.y)*(pt2.y - pt0.y);
 			double d0 = x0 + y0; double d1 = x1 + y1; double d2 = x2 + y2;
 
+			// check if the three points are far enough on their 2d image
 			if (d0 >= min_dist && d1 >= min_dist && d2 >= min_dist)
 				break;
 
-			if (selection_iter >= 50)
-            {
-                std::cerr << "Finding RANSAC 3 matches > min_dist not possible..." << std::endl;
-				break;
-                // return std::vector<double>();
-            }
+
 		}
+
+		if (!found_active)
+			continue;
 
         assert (active.size() == 3);
         // std::cout << "Random 3 Generated: " << active[0] << ", " << active[1] << ", " << active[2] << std::endl;

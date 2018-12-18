@@ -45,7 +45,7 @@
 		<param name="change_delta_pose_to_velocity" type="bool" value="true" /> 
 		<!-- <param name="moving_object_polygons" type="str" value="/arena_movidius/objects" /> -->
 
-		<rosparam file="$(find ssf_updates)/visionpose_sensor_fix.yaml"/>
+		<rosparam file="$(find ssf_updates)/visionpose_sensor_fix_arena_glass.yaml"/>
 	</node>
 
 </launch>

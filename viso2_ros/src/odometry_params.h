@@ -36,6 +36,7 @@ namespace viso2_ros
 		std::string left_topic, right_topic;
 		std::string left_info_topic, right_info_topic;
 
+		double variance_scale;
 
 		//// Main()
 		bool visualisation_on;
@@ -106,6 +107,8 @@ namespace viso2_ros
 		ROS_ASSERT(local_nh.getParam("right_topic", 					params.right_topic));
 		ROS_ASSERT(local_nh.getParam("left_info_topic", 				params.left_info_topic));
 		ROS_ASSERT(local_nh.getParam("right_info_topic", 				params.right_info_topic));
+
+		ROS_ASSERT(local_nh.getParam("variance_scale", 				params.variance_scale));
 
 		//// Main()
 		ROS_ASSERT(local_nh.getParam("visualisation_on", 				params.visualisation_on));

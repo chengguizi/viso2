@@ -187,6 +187,7 @@ protected:
 			if (std::abs(jitter/avg_time_gap) > 0.3){
 				ROS_ERROR_STREAM("Jitter Detected: average_gap=" << avg_time_gap << ", but current=" << delta_t);
 				mode = Viso2Eigen::Mode::FIRST_FRAME;
+				avg_time_gap = avg_time_gap*0.98 + delta_t*0.02;
 			}else
 				avg_time_gap = avg_time_gap*0.95 + delta_t*0.05;
 		}
@@ -255,7 +256,7 @@ protected:
 		//////////////////////////////////////
 
 			// compute optical flow and decide the next frame's use_old_reference_frame value
-			double opticalFlow = viso2->computeOpticalFlow();
+			double opticalFlow = viso2->computeOpticalFlow(); // average of highest and average flow
 
 			assert (voState.tfStamped.size() == state_idx_next + 1);
 
@@ -284,7 +285,7 @@ protected:
 		if (I <= 3)
 			variance = 9999;
 		else
-		 	variance = 0.03 * std::pow(matched_size/I,5)*(image_area/(image_area*0.05+area)) / std::sqrt(I) * std::sqrt(delta_t) ;
+		 	variance = param.variance_scale * std::pow(matched_size/I,5)*(image_area/(image_area*0.05+area)) / std::sqrt(I) * std::sqrt(delta_t) ;
 
 		variance = std::max(0.005, variance);
 

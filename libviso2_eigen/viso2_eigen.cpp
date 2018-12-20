@@ -294,6 +294,7 @@ double Viso2Eigen::computeOpticalFlow(){
     std::vector<int> inliers = getInlier();
 
     double highest_flow = 0.0;
+    double avg_flow = 0.0;
 
     for (size_t i=0; i<inliers.size(); i++){
         size_t idx = inliers[i];
@@ -307,10 +308,14 @@ double Viso2Eigen::computeOpticalFlow(){
 
         double flow = x_diff*x_diff + y_diff*y_diff;
 
+        avg_flow += flow;
+
         if (highest_flow < flow) highest_flow = flow;
     }
 
-    return highest_flow;
+    avg_flow /= inliers.size();
+
+    return (highest_flow + avg_flow)/2.0;
 }
 
 

@@ -210,7 +210,7 @@ std::vector<double> StereoMotionEstimator::estimateMotion()
 		// adjust threshold according the "goodness"
 		double threshold;
 		threshold = (1 - std::max(0.0, Z[i] - min_z) / (max_z - min_z)) * param.inlier_threshold;
-		threshold = std::max(0.5, threshold); 
+		threshold = std::max(1.0, threshold); 
 
 		GoodPointThreshold[i] = threshold * threshold;
 	}

@@ -25,7 +25,7 @@
 		<!-- StereoMotionEstimator -->
 		<param name="ransac_iters" type="int" value="200" />
 		<param name="inlier_threshold" type="double" value="3.0" />
-		<param name="inlier_ratio_min" type="double" value="0.7" />
+		<param name="inlier_ratio_min" type="double" value="0.6" />
 		<param name="reweighting" type="bool" value="true" />
 
 		<!-- Stereo Odometry Main Class -->

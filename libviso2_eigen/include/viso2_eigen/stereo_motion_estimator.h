@@ -78,7 +78,7 @@ private:
 
     struct Result{
         bool valid;
-        std::vector<double> tr_delta; // final TR transform estimation in VISO vector form
+        std::vector<double> tr_delta; // final TR transform estimation in VISO vector form (rotation, translation)
         Eigen::Affine3d Tr_delta; // TR transform in homogenous matrix form
 
         std::vector<int> inliers; // index of all inliers

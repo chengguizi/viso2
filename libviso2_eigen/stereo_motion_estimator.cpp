@@ -98,6 +98,17 @@ inline double getContourArea(const std::vector<cv::Point2f> &pts){
 }
 
 
+inline double getConvexHullArea(const std::vector<cv::Point2f> &pts){
+
+	if (pts.size()<3)
+		return 0;
+
+	// Calculating the convex Hull
+	std::vector<cv::Point2f> hull;
+	convexHull(pts, hull);
+	return contourArea(hull);
+}
+
 /////////////////////////////////////////////////////////////////////////////////
 //// Implementation of Private Member Functions
 /////////////////////////////////////////////////////////////////////////////////
@@ -189,9 +200,12 @@ std::vector<double> StereoMotionEstimator::estimateMotion()
 			num_good_points++;
 	}
 
+
+	// return false if all points are too far
 	if (num_good_points < 5)
 	{
 		std::cerr << "Warning: GOOD POINTS ARE TOO FEW (Majority of points are too far, compared to baseline)" << std::endl;
+		return std::vector<double>();
 	}
 
 	// loop variables
@@ -334,7 +348,7 @@ std::vector<double> StereoMotionEstimator::estimateMotion()
 			pts.push_back( (*keyl2_vec) [ (*matches_quad_vec)[idx][L2] ].pt );
 		}
 
-		double area_curr = std::sqrt(getContourArea(pts));
+		double area_curr = std::sqrt(getConvexHullArea(pts));
 
         if (inliers_curr.size()*area_curr > inliers.size()*area)
         {

@@ -184,12 +184,22 @@ protected:
 				
 
 			double jitter = delta_t - avg_time_gap;
-			if (std::abs(jitter/avg_time_gap) > 0.3){
-				ROS_ERROR_STREAM("Jitter Detected: average_gap=" << avg_time_gap << ", but current=" << delta_t);
-				mode = Viso2Eigen::Mode::FIRST_FRAME;
-				avg_time_gap = avg_time_gap*0.98 + delta_t*0.02;
-			}else
-				avg_time_gap = avg_time_gap*0.95 + delta_t*0.05;
+
+			if (delta_t > 0)
+			{
+				if (std::abs(jitter/avg_time_gap) > 0.3){
+					ROS_ERROR_STREAM("Jitter Detected: average_gap=" << avg_time_gap << ", but current=" << delta_t);
+					mode = Viso2Eigen::Mode::FIRST_FRAME;
+					// avg_time_gap = avg_time_gap*0.98 + delta_t*0.02;
+
+					if (jitter / avg_time_gap < -0.3){
+						ROS_WARN("Resetting average_gap");
+						avg_time_gap = 0;
+					}
+				}else
+					avg_time_gap = avg_time_gap*0.95 + delta_t*0.05;
+			}
+			
 		}
 
 		last_frame_time = cvImage_l->header.stamp;
@@ -225,7 +235,7 @@ protected:
 			Eigen::Affine3d tf = voState.reference_motion.inverse() * viso2->getCameraMotion();
 			Eigen::Vector3d origin = {0,0,0};
 			origin = tf * origin;
-			if (origin.norm() > 1.0){
+			if (avg_time_gap > 0 && origin.norm() > (10.0 / avg_time_gap) ){
 				ROS_WARN_STREAM("Translation delta too big : " << origin.transpose() );
 				ROS_WARN_STREAM(tf.matrix());
 				viso2_result = false;

@@ -92,6 +92,7 @@ private:
 
 	std::vector<double> estimateMotion();
 
+    double good_point_threshold;
 	std::vector<int>    getInlier(std::vector<double> &tr);
 
     std::vector<int>    getRandomSample (int N,int num);
@@ -106,6 +107,7 @@ private:
 
 
     std::vector<double> X,Y,Z,J; // 3D points and Jacobian
+    std::vector<double> GoodPointThreshold;
     std::vector<double> p_observe;  // observed 2d points
     std::vector<double> p_predict;  // predicted 2d points
     std::vector<double> p_residual; // residuals (p_residual=p_observe-p_predict)

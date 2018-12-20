@@ -32,6 +32,10 @@ void StereoMotionEstimator::setParam(StereoMotionEstimatorParam::Parameters &par
     std::cout << "- baseline=" << this->param.calib.baseline << ", f=" << this->param.calib.f << ", cu=" << this->param.calib.cu << 
         ", cv=" << this->param.calib.cv << std::endl;
     std::cout << "==============================================================" << std::endl;
+
+	good_point_threshold = 0.5 * param.calib.f * param.calib.baseline;
+
+	std::cout << "good_point_threshold = " << good_point_threshold << std::endl;
 }
 
 void StereoMotionEstimator::pushBackData(
@@ -164,6 +168,7 @@ std::vector<double> StereoMotionEstimator::estimateMotion()
     X.resize(N);
     Y.resize(N);
     Z.resize(N);
+	GoodPointThreshold.resize(N);
     J.resize(4 * N * 6); // yx: save Jacobian matrix for each point (6*4: 6 functions and 4 unknowns)
 
     p_predict.resize(4 * N);
@@ -178,7 +183,10 @@ std::vector<double> StereoMotionEstimator::estimateMotion()
 
 	// Count the number of short-mid range 3D points, as they give more information in motion estimation
 	int num_good_points = 0;
-	const double good_point_threshold = 0.5 * _f * param.calib.baseline;
+
+	// range of z for computing inliers
+	const double max_z = good_point_threshold;
+	const double min_z = good_point_threshold / 10;
 
 	for (size_t i = 0; i < (*matches_quad_vec).size() ; i++ )
 	{
@@ -198,6 +206,13 @@ std::vector<double> StereoMotionEstimator::estimateMotion()
 		// accumulate count for good points
 		if (Z[i] < good_point_threshold)
 			num_good_points++;
+
+		// adjust threshold according the "goodness"
+		double threshold;
+		threshold = (1 - std::max(0.0, Z[i] - min_z) / (max_z - min_z)) * param.inlier_threshold;
+		threshold = std::max(0.5, threshold); 
+
+		GoodPointThreshold[i] = threshold * threshold;
 	}
 
 
@@ -580,16 +595,18 @@ std::vector<int> StereoMotionEstimator::getInlier(std::vector<double> &tr)
 	computeObservations(active, true);
 	computeResidualsAndJacobian(tr, active, true);
 
-	// compute inliers
-    double threshold = param.inlier_threshold * param.inlier_threshold;
+
+
 	std::vector<int> inliers;
 	for (size_t i = 0; i < matches_quad_vec->size() ; i++)
     {
+		
+
 		double sq0 = p_residual[4 * i + 0] * p_residual[4 * i + 0];
 		double sq1 = p_residual[4 * i + 1] * p_residual[4 * i + 1];
 		double sq2 = p_residual[4 * i + 2] * p_residual[4 * i + 2];
 		double sq3 = p_residual[4 * i + 3] * p_residual[4 * i + 3];
-		if ( (sq0 + sq1 + sq2 + sq3) / 2.0 < threshold)
+		if ( (sq0 + sq1 + sq2 + sq3) / 2.0 < GoodPointThreshold[i])
             inliers.push_back(i);
         // double diff_lx = p_observe[4 * i + 0] - p_predict[4 * i + 0];
         // double diff_ly = p_observe[4 * i + 1] - p_predict[4 * i + 1];

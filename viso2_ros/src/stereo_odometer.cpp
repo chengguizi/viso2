@@ -265,8 +265,19 @@ protected:
 		//// STEP 3: Obtain use_old_reference_frame value for the next frame
 		//////////////////////////////////////
 
-			// compute optical flow and decide the next frame's use_old_reference_frame value
+		std::vector<int> inliers = viso2->getInlier();
+		double I = inliers.size();
+
+		// compute optical flow and decide the next frame's use_old_reference_frame value
+
+		voState.tfStamped[state_idx_next].use_old_reference_frame = true;
+		voState.reference_motion = cameraMotion;
+
+		if (I > param.ref_frame_inlier_threshold)
+		{
 			double opticalFlow = viso2->computeOpticalFlow(); // average of highest and average flow
+
+			std::cout  << "flow: " << opticalFlow << std::endl;
 
 			assert (voState.tfStamped.size() == state_idx_next + 1);
 
@@ -274,17 +285,14 @@ protected:
 			{
 				voState.tfStamped[state_idx_next].use_old_reference_frame = false;
 				voState.reference_motion = Eigen::Affine3d::Identity();
-			}else{
-				voState.tfStamped[state_idx_next].use_old_reference_frame = true;
-				voState.reference_motion = cameraMotion;
 			}
+		}
 		
 		//////////////////////////////////////
 		//// STEP 4: Calculate Variance
 		//////////////////////////////////////
 
-		std::vector<int> inliers = viso2->getInlier();
-		double I = inliers.size();
+
 		int matched_size = viso2->getMatchedSize();
 		double area = viso2->getArea();
 
@@ -311,8 +319,7 @@ protected:
 
 			// std::cout << "Frame: " << state_idx << " stamp: " << voState.tfStamped[state_idx].stamp << std::endl; 
 			std::cout << "tf:\n" << voState.tfStamped[state_idx].tf.matrix() << std::endl;
-			std::cout << "flow: " << opticalFlow << " -> " 
-				<< (voState.tfStamped[state_idx_next].use_old_reference_frame ? "use_old_frame next" : "replace_frame next") << std::endl;
+			std::cout << (voState.tfStamped[state_idx_next].use_old_reference_frame ? "use_old_frame next" : "replace_frame next") << std::endl;
 
 			integrateAndPublish(voState.tfStamped[state_idx].tf, voState.tfStamped[state_idx].stamp, voState.tfStamped[state_idx-1].stamp);
 		

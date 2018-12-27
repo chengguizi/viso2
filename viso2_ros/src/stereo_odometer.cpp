@@ -112,6 +112,7 @@ protected:
 		resetPose();
 		voState = VOState();
 		voState.last_frame_time_ns = header->stamp.toNSec();
+		voState.tfStamped.push_back(TfStamped());
 	}
 	
 	bool disable_debug = false;

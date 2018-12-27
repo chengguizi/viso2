@@ -200,10 +200,16 @@ protected:
 		//// Also publish the corresponding velocity
 		double delta_t = (time_curr - time_pre) / 1.0e9;
 		assert (delta_t > 0);
-		Eigen::Vector3d delta_translation = delta_transform.translation();
-		delta_translation /= delta_t;
-
+		const Eigen::Vector3d delta_translation_prerotated = delta_transform.translation();
 		const Eigen::Matrix3d delta_rotation = delta_transform.rotation();
+
+		// hm: the translation term in the Tr matrix is after the rotation (therefore in the curr frame base)
+		// to reference this translation in the previous frame, as the same with rotation, we need to unrotate them (change basis)
+		// t_pre = R_pc_' * t_curr
+		Eigen::Vector3d delta_translation = delta_rotation.transpose() *  delta_translation_prerotated;
+
+		delta_translation /= delta_t;
+		
 		Eigen::AngleAxisd delta_angleaxis(delta_rotation);
 
 		delta_angleaxis.angle() /= delta_t;

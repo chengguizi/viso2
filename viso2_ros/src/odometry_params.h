@@ -64,6 +64,8 @@ namespace viso2_ros
 		ROS_ASSERT(local_nh.getParam("inlier_threshold",      				params.inlier_threshold));
 		ROS_ASSERT(local_nh.getParam("inlier_ratio_min",      				params.inlier_ratio_min));
 		ROS_ASSERT(local_nh.getParam("reweighting",      					params.reweighting));
+		ROS_ASSERT(local_nh.getParam("good_point_threshold_scale",      	params.good_point_threshold_scale));
+		
 		// local_nh.getParam("image_width",      				params.image_width);
 		// local_nh.getParam("image_height",      				params.image_height);
 		// Calibration
@@ -143,6 +145,8 @@ namespace viso2_ros
 		out << "  reweighting           = " << params.reweighting << std::endl;
 		out << "  image_width           = " << params.image_width << std::endl;
 		out << "  image_height          = " << params.image_height << std::endl;
+
+		out << "  good_point_thres_scale= " << params.good_point_threshold_scale << std::endl;
 
 		out << "  baseline              = " << params.calib.baseline << std::endl;
 		out << "  calib_f               = " << params.calib.f << std::endl;

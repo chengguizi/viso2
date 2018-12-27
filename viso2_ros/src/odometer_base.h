@@ -203,10 +203,23 @@ protected:
 		Eigen::Vector3d delta_translation = delta_transform.translation();
 		delta_translation /= delta_t;
 
+		const Eigen::Matrix3d delta_rotation = delta_transform.rotation();
+		Eigen::AngleAxisd delta_angleaxis(delta_rotation);
+
+		delta_angleaxis.angle() /= delta_t;
+
+		Eigen::Quaternion<double> delta_quat(delta_angleaxis);
+		
+
 		geometry_msgs::PoseWithCovarianceStamped velocity_pose_msg;
 		velocity_pose_msg.pose.pose.position.x = delta_translation(0);
 		velocity_pose_msg.pose.pose.position.y = delta_translation(1);
 		velocity_pose_msg.pose.pose.position.z = delta_translation(2);
+
+		velocity_pose_msg.pose.pose.orientation.w = delta_quat.w();
+		velocity_pose_msg.pose.pose.orientation.x = delta_quat.x();
+		velocity_pose_msg.pose.pose.orientation.y = delta_quat.y();
+		velocity_pose_msg.pose.pose.orientation.z = delta_quat.z();
 
 		velocity_pose_msg.pose.covariance = pose_covariance_;
 

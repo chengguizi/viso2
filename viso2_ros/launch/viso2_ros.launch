@@ -3,8 +3,8 @@
 	<node pkg="viso2_ros" type="stereo_odometer" name="stereo_odometer" output="screen">
 		<!-- Main() -->
 		
-		<param name="variance_scale" type="double" value="0.03" /> 
-		<param name="visualisation_on" type="bool" value="false" /> 
+		<param name="variance_scale" type="double" value="0.01" /> 
+		<param name="visualisation_on" type="bool" value="true" /> 
 
 		<!-- Stereo Processor -->
 		<param name="left_topic" type="str" value="/stereo/left/image_rect_raw" />
@@ -23,10 +23,13 @@
 		<param name="compulte_scaled_keys" type="bool" value="true" /> 
 
 		<!-- StereoMotionEstimator -->
-		<param name="ransac_iters" type="int" value="200" />
+		<param name="ransac_iters" type="int" value="250" />
 		<param name="inlier_threshold" type="double" value="3.0" />
 		<param name="inlier_ratio_min" type="double" value="0.6" />
 		<param name="reweighting" type="bool" value="true" />
+
+		<param name="good_point_threshold_scale" type="double" value="1" />
+		
 
 		<!-- Stereo Odometry Main Class -->
 		<param name="use_ekf_pose_as_initial" type="bool" value="true" />

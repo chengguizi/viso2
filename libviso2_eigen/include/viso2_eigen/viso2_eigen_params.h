@@ -43,6 +43,8 @@ namespace StereoMotionEstimatorParam{
         int image_width;
         int image_height;
 
+        double good_point_threshold_scale = 0.5;
+
         Calibration calib;
 	};
 

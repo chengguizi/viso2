@@ -110,6 +110,8 @@ protected:
 	void resetCallback(const std_msgs::HeaderPtr &header){
 		ROS_WARN_STREAM("Reset occurs at " << header->stamp );
 		resetPose();
+		voState = VOState();
+		voState.last_frame_time_ns = header->stamp.toNSec();
 	}
 	
 	bool disable_debug = false;
@@ -122,7 +124,15 @@ protected:
 
 		if (disable_debug) return;
 
-		ros::WallTime start_time = ros::WallTime::now();
+		std::cout << "\n\nimageCallback(): frame at " << l_image_msg->header.stamp << std::endl;
+
+		if ( l_image_msg->header.stamp.toNSec() <= voState.last_frame_time_ns)
+		{
+			ROS_WARN_STREAM_THROTTLE(1,"Non-progressive frame detected in viso2 imageCallback()");
+			return;
+		}
+
+		// ros::WallTime start_time = ros::WallTime::now();
 
 		// static cv::Mat cv_leftImg_prev;
 		// static cv::Mat cv_rightImg_prev;
@@ -158,8 +168,6 @@ protected:
 
 		// hm: for the moment we only keep the recent two record
 		assert (state_idx <= 1);
-
-		std::cout << "\n\nimageCallback(): frame " << state_idx << " at " << l_image_msg->header.stamp << std::endl;
 
 		//////////////////////////////////////
 		//// STEP 1: Push Back Data, Quad Matching, Motion Estimation
@@ -221,8 +229,12 @@ protected:
 			std::cerr << "First frame process() SUCCESS" << std::endl;
 
 			// we still want visualisation
-			getVisualisation(outImg, outImg_right);
-			publishDebugImg(outImg,outImg_right,l_info_msg,r_info_msg,cvImage_l->header.stamp);
+			if (param.visualisation_on)
+			{
+				getVisualisation(outImg, outImg_right);
+				publishDebugImg(outImg,outImg_right,l_info_msg,r_info_msg,cvImage_l->header.stamp);
+			}
+			
 			voState.reference_motion = Eigen::Affine3d::Identity();
 			return;
 		}
@@ -265,13 +277,13 @@ protected:
 		//// STEP 3: Obtain use_old_reference_frame value for the next frame
 		//////////////////////////////////////
 
-		std::vector<int> inliers = viso2->getInlier();
+		const std::vector<int> inliers = viso2->getInlier();
 		double I = inliers.size();
 
 		// compute optical flow and decide the next frame's use_old_reference_frame value
 
-		voState.tfStamped[state_idx_next].use_old_reference_frame = true;
-		voState.reference_motion = cameraMotion;
+		voState.tfStamped[state_idx_next].use_old_reference_frame = false;
+		voState.reference_motion = Eigen::Affine3d::Identity();
 
 		if (I > param.ref_frame_inlier_threshold)
 		{
@@ -281,10 +293,10 @@ protected:
 
 			assert (voState.tfStamped.size() == state_idx_next + 1);
 
-			if ( opticalFlow > param.ref_frame_motion_threshold * param.ref_frame_motion_threshold )
+			if ( opticalFlow < param.ref_frame_motion_threshold * param.ref_frame_motion_threshold )
 			{
-				voState.tfStamped[state_idx_next].use_old_reference_frame = false;
-				voState.reference_motion = Eigen::Affine3d::Identity();
+				voState.tfStamped[state_idx_next].use_old_reference_frame = true;
+				voState.reference_motion = cameraMotion;
 			}
 		}
 		
@@ -294,20 +306,17 @@ protected:
 
 
 		int matched_size = viso2->getMatchedSize();
-		double area = viso2->getArea();
+		double confidence = viso2->getConfidence();
 
-		double image_area = param.sme_param.image_height * param.sme_param.image_width;
 		double delta_t = (voState.tfStamped[state_idx].stamp - voState.tfStamped[state_idx-1].stamp)/1.0e9;
 
 		double variance;
-		if (I <= 3)
+		if (I <= 3 || confidence == 0.0)
 			variance = 9999;
 		else
-		 	variance = param.variance_scale * std::pow(matched_size/I,5)*(image_area/(image_area*0.05+area)) / std::sqrt(I) * std::sqrt(delta_t) ;
+		 	variance = param.variance_scale * std::sqrt(delta_t * 100 /*benchmark 100 Hz*/) / std::pow(confidence,4) ;
 
-		variance = std::max(0.005, variance);
-
-		// double variance = std::pow(I/2.0,-2)*(image_area/area);
+		// variance = std::max(0.005, variance);
 
 		std::cout << "variance = " << variance << std::endl;
 
@@ -346,8 +355,12 @@ protected:
 			disable_debug = false;
 		}
 
-		getVisualisation(outImg, outImg_right);
-		publishDebugImg(outImg,outImg_right,l_info_msg,r_info_msg,cvImage_l->header.stamp);
+		if (param.visualisation_on)
+		{
+			getVisualisation(outImg, outImg_right);
+			publishDebugImg(outImg,outImg_right,l_info_msg,r_info_msg,cvImage_l->header.stamp);
+		}
+		
 	}
 
 	// double computeFeatureFlow(
@@ -395,29 +408,7 @@ int main(int argc, char **argv)
 	ros::AsyncSpinner spinner(2);
 	spinner.start();
 
-	if (param.visualisation_on){
-		cv::Mat outImg, outImg_right;
-		// cv::imshow( "Current Frame", cv::Mat(cv::Size(100,100),CV_8UC1) );
-		while (ros::ok())
-		{
-			uint64_t last = odometer.getLastFrameTimeNs();
-			if ( seq_showed != last )
-			{
-				// cv::Mat outImg, outImg_right;
-				
-				// odometer.getVisualisation(outImg,outImg_right);
-				// cv::imshow(cv_window_name_left, outImg);
-				// cv::imshow(cv_window_name_right, outImg_right);
-				cvWaitKey(1);
-				seq_showed = last;
-			}else
-				cvWaitKey(1);
-			// ros::spinOnce();
-			// ros::Duration(0.001).sleep();
-		}
-	}	
-	else
-		ros::waitForShutdown(); // ros::spin();
+	ros::waitForShutdown(); // ros::spin();
 	
 	return 0;
 }

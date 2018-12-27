@@ -50,7 +50,7 @@ public:
     Eigen::Affine3d getCameraMotion();
     std::vector<int> getInlier(); // the inlier index is sorted in the ascending order
     int getMatchedSize(){return matches_quad_vec.size();}
-    double getArea();
+    double getConfidence();
 
     double computeOpticalFlow();
 

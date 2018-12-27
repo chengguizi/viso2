@@ -13,6 +13,7 @@
 #include "stereo_motion_estimator.h"
 
 #include <cmath>
+#include <algorithm>
 #include "opencv2/imgproc/imgproc.hpp"
 
 /////////////////////////////////////////////////////////////////////////////////
@@ -33,7 +34,7 @@ void StereoMotionEstimator::setParam(StereoMotionEstimatorParam::Parameters &par
         ", cv=" << this->param.calib.cv << std::endl;
     std::cout << "==============================================================" << std::endl;
 
-	good_point_threshold = 0.5 * param.calib.f * param.calib.baseline;
+	good_point_threshold = param.good_point_threshold_scale * param.calib.f * param.calib.baseline;
 
 	std::cout << "good_point_threshold = " << good_point_threshold << std::endl;
 }
@@ -122,7 +123,7 @@ std::vector<double> StereoMotionEstimator::estimateMotion()
 
 	this->result.tr_delta.clear();
 	this->result.inliers.clear();
-	this->result.area = 0;
+	this->result.confidence = 0.0;
 
 	// compute minimum distance for RANSAC samples
 	float width_max = 0, height_max = 0;
@@ -164,7 +165,6 @@ std::vector<double> StereoMotionEstimator::estimateMotion()
 
 	// clear vectors
 	std::vector<int> inliers;
-	double area = 0;
     X.resize(N);
     Y.resize(N);
     Z.resize(N);
@@ -186,7 +186,7 @@ std::vector<double> StereoMotionEstimator::estimateMotion()
 
 	// range of z for computing inliers
 	const double max_z = good_point_threshold;
-	const double min_z = good_point_threshold / 10;
+	const double min_z = good_point_threshold / 10.0;
 
 	for (size_t i = 0; i < (*matches_quad_vec).size() ; i++ )
 	{
@@ -208,6 +208,7 @@ std::vector<double> StereoMotionEstimator::estimateMotion()
 			num_good_points++;
 
 		// adjust threshold according the "goodness"
+		// the threshold decreases as the perceived depth increases
 		double threshold;
 		threshold = (1 - std::max(0.0, Z[i] - min_z) / (max_z - min_z)) * param.inlier_threshold;
 		threshold = std::max(1.0, threshold); 
@@ -217,7 +218,7 @@ std::vector<double> StereoMotionEstimator::estimateMotion()
 
 
 	// return false if all points are too far
-	if (num_good_points < 5)
+	if (num_good_points < 3)
 	{
 		std::cerr << "Warning: GOOD POINTS ARE TOO FEW (Majority of points are too far, compared to baseline)" << std::endl;
 		return std::vector<double>();
@@ -228,6 +229,7 @@ std::vector<double> StereoMotionEstimator::estimateMotion()
 	std::vector<double> tr_delta_curr(6,0);
 
 	std::vector<int> best_active;
+	double best_confidence = 0;
 
 	// // initial RANSAC estimate
 	int max_iteration = N*N*N / 5;
@@ -261,18 +263,19 @@ std::vector<double> StereoMotionEstimator::estimateMotion()
 			// Check if the sum of depth is not too big
 
 			// depth is always positive
-			double z0 = Z[active[0]];
-			double z1 = Z[active[1]];
-			double z2 = Z[active[2]];
+			// double z0 = Z[active[0]];
+			// double z1 = Z[active[1]];
+			// double z2 = Z[active[2]];
 
-			const double maximum_depth_sum = 2.5 * _f * param.calib.baseline;
-			if ( (z0 + z1 + z2) > maximum_depth_sum)
-			{
-				// std::cout << "z0,z1,z2 = " << z0 << "," << z1 << "," << z2 << std::endl;
-				// std::cout << "maximum_depth_sum = " << maximum_depth_sum << std::endl;
-				continue;
-			}
-			
+
+			// Ensure not all three points are from the furthest distance
+			// const double maximum_depth_sum = 2.5 * _f * param.calib.baseline;
+			// if ( (z0 + z1 + z2) > maximum_depth_sum)
+			// {
+			// 	// std::cout << "z0,z1,z2 = " << z0 << "," << z1 << "," << z2 << std::endl;
+			// 	// std::cout << "maximum_depth_sum = " << maximum_depth_sum << std::endl;
+			// 	continue;
+			// }
 
             const cv::Point2f pt0 = (*keyl1_vec)[idx0].pt;
             const cv::Point2f pt1 = (*keyl1_vec)[idx1].pt;
@@ -357,49 +360,27 @@ std::vector<double> StereoMotionEstimator::estimateMotion()
 		// Update best inlier buffer if we have more inliers
         std::vector<int> inliers_curr = getInlier(tr_delta_curr);
 
-		// calculate area obtained by the current inliers
-		std::vector<cv::Point2f> pts;
-		for (auto idx : inliers_curr){
-			pts.push_back( (*keyl2_vec) [ (*matches_quad_vec)[idx][L2] ].pt );
-		}
 
-		double area_curr = std::sqrt(getConvexHullArea(pts));
+		double confidence_curr = getInlierConfidence(inliers_curr);
 
-        if (inliers_curr.size()*area_curr > inliers.size()*area)
+        if (confidence_curr > best_confidence)
         {
             inliers = inliers_curr;
             tr_delta = tr_delta_curr;
 			best_active = active;
-			area = area_curr;
+			best_confidence = confidence_curr;
 
 			// condition for early break, because the accuracy is high enough e.g. > 90%
 			double k = 0.95;
 			if (inliers.size() > k*N)
 			{
-				std::cout << "RANSAC Early Termination: Found accuracy: " << inliers.size() / (double)N << std::endl;
+				std::cout << "RANSAC Early Termination: Found confidence: " << inliers.size() / (double)N << std::endl;
 				break;
 			}
         }
-
-        // std::cout << "inlier: " << inliers_curr.size() << " out of " << N << std::endl;
-
-	// 	// probility of observing an inlier
-	// 	/*
-	// 	double Pin = double(inliers.size()) / double(N);
-	// 	if (Pin > Pbest) Pbest = Pin;
-	// 	N_ransac2 = log(1 - p) / log(1 - pow(Pbest, 3));
-
-	// 	// N_ransac = 200 means, Pbest > 0.28
-	// 	if (N_ransac2 < N_ransac &&  k < N_ransac2)
-	// 	{
-	// 		N_ransac = N_ransac2;
-	// 	}
-	// 	*/
-
-    // std::cout << "End k=" << k << std::endl;
 	}
 
-    std::cout << "Best inlier: " << inliers.size() << " out of " << N << std::endl;
+    std::cout << "Best inlier: " << inliers.size() << " out of " << N << ", confidence = " << best_confidence << std::endl;
 
 	// Sanity Check
 	if ( inliers.size() / (double)N < param.inlier_ratio_min )
@@ -460,12 +441,20 @@ std::vector<double> StereoMotionEstimator::estimateMotion()
 
 	this->result.tr_delta = tr_delta;
 	this->result.inliers = getInlier(tr_delta);
-	this->result.area = area*area;
+	this->result.confidence = getInlierConfidence(this->result.inliers, true);
+		
 	
 	std::cout << "inliers.size()= " << inliers.size() << " , this->result.inliers.size()= " << this->result.inliers.size() << std::endl;
-	std::cout << "this->result.area=" << this->result.area << std::endl;
-	assert( this->result.inliers.size() < 10 || this->result.inliers.size() >= inliers.size()*0.7);
+	std::cout << "best_confidence = " << best_confidence << ", this->result.confidence=" << this->result.confidence << std::endl;
 	
+	// Sanity Check
+
+	if (this->result.confidence < best_confidence * 0.8)
+	{
+		std::cerr << "Confidence DROPS in the refinement step" << std::endl;
+		return std::vector<double>();
+	}
+
 	return tr_delta;
 }
 
@@ -618,6 +607,89 @@ std::vector<int> StereoMotionEstimator::getInlier(std::vector<double> &tr)
     }
 
 	return inliers;
+}
+
+double StereoMotionEstimator::getInlierConfidence(const std::vector<int> &inliers, bool is_debug)
+{
+	const int N_zone = 10;
+	const int minimum_inlier_count = 5;
+
+    const int I = inliers.size();
+
+
+	//// CONFIDENCE FOR INLIER NUMBER
+	if (I <= minimum_inlier_count)
+	{
+		// std::cout  << "confidence = 0, as inlier size too small: " << I << ", compared to minimum " << minimum_inlier_count << std::endl;
+		return 0.0;
+	}
+
+	double confidence_inlier = 1.0 - 1.0 / (I - minimum_inlier_count + 1.0); // Higher the inlier, higher the confidence
+
+
+	//// CONFIDENCE FOR INLIER DEPTH ZONES
+	std::vector<int> zone(N_zone,0);
+	std::vector<double> zone_limit(N_zone);
+	zone_limit[N_zone - 1] = good_point_threshold;
+
+	const double zone_scale = 1.5;
+	for (int i = N_zone - 2; i >= 1 ; i--)
+	{
+		zone_limit[i] = zone_limit[i+1] / zone_scale;
+	} 
+
+
+	int count = 0;
+
+	for (int inlier : inliers)
+	{
+		auto upper = std::upper_bound(zone_limit.begin(), zone_limit.end(), Z[inlier]); // greater than the value
+		
+		if (upper != zone_limit.end())
+		{
+			zone[(upper - zone_limit.begin())]++;
+		}
+	}
+	
+	for (int i = 0 ; i < N_zone; i++ )
+	{
+		const int minimum_zone_count = 2;
+		if (zone[i] >= minimum_zone_count)
+			count++;
+	}
+
+	// DEBUG
+	if (is_debug)
+	{
+		std::cout  << "zone: ";
+		for (int i = 0 ; i < N_zone; i++ )
+		{
+			std::cout << (zone[i] >= 1);
+		}
+		std::cout << std::endl;
+	}
+	
+
+	double confidence_zone = 0.6 + 0.4 * std::min ( 1.0 , count / 3.0 ); // Higher the count, higher the confidence, [0,1)
+
+	//// CONFIDENCE FOR INLIER AREA
+
+	std::vector<cv::Point2f> pts;
+	for (int idx : inliers){
+		pts.push_back( (*keyl2_vec) [ (*matches_quad_vec)[idx][L2] ].pt );
+	}
+	double area = getConvexHullArea(pts);
+
+	const double total_area = param.image_width * param.image_height;
+	double confidence_area = std::tanh(10.0 * area / total_area);
+
+	double confidence = confidence_inlier * confidence_zone * confidence_area;
+
+	//// DEBUG
+	if (is_debug)
+		std::cout << "getInlierConfidence = " << confidence << ": "<< confidence_inlier << ", " << confidence_zone << ", " << confidence_area << std::endl;
+	
+	return confidence;
 }
 
 

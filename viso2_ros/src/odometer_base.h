@@ -90,7 +90,7 @@ public:
 
 	// bag.open("/tmp/viso_ros_pose.bag",rosbag::bagmode::Write);
 	loadCameraImuTransform();
-	resetPose();
+	resetPose(0);
 	}
 
 	void publishDebugImg(const cv::Mat &imageLeft_cv,const  cv::Mat &imageRight_cv,const  sensor_msgs::CameraInfoConstPtr &cameraInfo_left,
@@ -137,7 +137,7 @@ protected:
 
 		if ( global_start_ != 0 && global_start_ > time_pre )
 		{
-			ROS_WARN_STREAM("EKF initiated, but ignorning frames before global start time : " << ros::Time().fromNSec(time_pre));
+			ROS_WARN_STREAM("EKF initiated, but ignorning frames before global start time =" << ros::Time().fromNSec(global_start_) << ", current=" << ros::Time().fromNSec(time_pre));
 			return;
 		}
 
@@ -198,7 +198,7 @@ protected:
 		} // end of publishing integrated pose / odometry
 
 		//// Also publish the corresponding velocity
-		double delta_t = (time_curr - time_pre) / 1.0e9;
+		double delta_t = (double)(time_curr - time_pre) / 1.0e9;
 		assert (delta_t > 0);
 		const Eigen::Vector3d delta_translation_prerotated = delta_transform.translation();
 		const Eigen::Matrix3d delta_rotation = delta_transform.rotation();
@@ -235,13 +235,13 @@ protected:
 
 	}
 
-	void resetPose()
+	void resetPose(uint64_t global_start)
 	// bool resetPose(std_srvs::Empty::Request&, std_srvs::Empty::Response&)
 	{
 		integrated_vo_pose_.setIdentity();
 		pose_covariance_.assign(0.0);
 		twist_covariance_.assign(0.0);
-		global_start_ = ros::Time::now().toNSec();
+		global_start_ = global_start;
 
 		if (use_ekf_pose_as_initial){
 			ROS_WARN("Will wait for EKF initial pose, before publishing odometry and pose");

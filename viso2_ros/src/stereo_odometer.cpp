@@ -109,7 +109,7 @@ protected:
 
 	void resetCallback(const std_msgs::HeaderPtr &header){
 		ROS_WARN_STREAM("Reset occurs at " << header->stamp );
-		resetPose();
+		resetPose(header->stamp.toNSec());
 		voState = VOState();
 		voState.last_frame_time_ns = header->stamp.toNSec();
 		voState.tfStamped.push_back(TfStamped());
@@ -315,7 +315,7 @@ protected:
 		if (I <= 3 || confidence == 0.0)
 			variance = 9999;
 		else
-		 	variance = param.variance_scale * std::sqrt(delta_t * 100 /*benchmark 100 Hz*/) / std::pow(confidence,4) ;
+		 	variance = param.variance_scale * std::sqrt(delta_t * 100 /*benchmark 100 Hz*/) / std::pow(confidence,5) ;
 
 		// variance = std::max(0.005, variance);
 

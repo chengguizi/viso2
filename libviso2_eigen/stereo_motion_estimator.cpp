@@ -639,7 +639,7 @@ double StereoMotionEstimator::getInlierConfidence(const std::vector<int> &inlier
 	} 
 
 
-	int count = 0;
+	double count = 0;
 
 	for (int inlier : inliers)
 	{
@@ -655,7 +655,7 @@ double StereoMotionEstimator::getInlierConfidence(const std::vector<int> &inlier
 	{
 		const int minimum_zone_count = 2;
 		if (zone[i] >= minimum_zone_count)
-			count++;
+			count += (double) N_zone / (i+N_zone); // decreasing importance for further features
 	}
 
 	// DEBUG
@@ -670,7 +670,7 @@ double StereoMotionEstimator::getInlierConfidence(const std::vector<int> &inlier
 	}
 	
 
-	double confidence_zone = 0.6 + 0.4 * std::min ( 1.0 , count / 3.0 ); // Higher the count, higher the confidence, [0,1)
+	double confidence_zone = std::min ( 1.0 , count ); // Higher the count, higher the confidence, [0,1)
 
 	//// CONFIDENCE FOR INLIER AREA
 

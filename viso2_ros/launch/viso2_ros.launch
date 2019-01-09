@@ -3,7 +3,7 @@
 	<node pkg="viso2_ros" type="stereo_odometer" name="stereo_odometer" output="screen">
 		<!-- Main() -->
 		
-		<param name="variance_scale" type="double" value="0.01" /> 
+		<param name="variance_scale" type="double" value="0.0001" /> 
 		<param name="visualisation_on" type="bool" value="true" /> 
 
 		<!-- Stereo Processor -->

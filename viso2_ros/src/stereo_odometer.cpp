@@ -16,6 +16,7 @@
 
 #include <iostream>
 #include <cassert>
+#include <mutex>
 
 #include <memory>
 
@@ -36,6 +37,8 @@ private:
 	ros::Subscriber _reset_sub;
 	std::unique_ptr<Viso2Eigen> viso2;
 	viso2_ros::Parameters param;
+
+	std::mutex in_process;
 
 	struct TfStamped{
 		Eigen::Affine3d tf;
@@ -109,10 +112,13 @@ protected:
 
 	void resetCallback(const std_msgs::HeaderPtr &header){
 		ROS_WARN_STREAM("Reset occurs at " << header->stamp );
+
+		in_process.lock();
 		resetPose(header->stamp.toNSec());
 		voState = VOState();
 		voState.last_frame_time_ns = header->stamp.toNSec();
 		voState.tfStamped.push_back(TfStamped());
+		in_process.unlock();
 	}
 	
 	bool disable_debug = false;
@@ -132,6 +138,8 @@ protected:
 			ROS_WARN_STREAM_THROTTLE(1,"Non-progressive frame detected in viso2 imageCallback()");
 			return;
 		}
+
+		in_process.lock();
 
 		// ros::WallTime start_time = ros::WallTime::now();
 
@@ -237,6 +245,7 @@ protected:
 			}
 			
 			voState.reference_motion = Eigen::Affine3d::Identity();
+			in_process.unlock();
 			return;
 		}
 
@@ -315,7 +324,7 @@ protected:
 		if (I <= 3 || confidence == 0.0)
 			variance = 9999;
 		else
-		 	variance = param.variance_scale * std::sqrt(delta_t * 100 /*benchmark 100 Hz*/) / std::pow(confidence,5) ;
+		 	variance = param.variance_scale * std::sqrt(delta_t * 100 /*benchmark 100 Hz*/) / std::pow(confidence,3) ;
 
 		// variance = std::max(0.005, variance);
 
@@ -361,8 +370,10 @@ protected:
 			getVisualisation(outImg, outImg_right);
 			publishDebugImg(outImg,outImg_right,l_info_msg,r_info_msg,cvImage_l->header.stamp);
 		}
-		
+		in_process.unlock();
 	}
+
+	
 
 	// double computeFeatureFlow(
 	// 		const std::vector<Matcher::p_match>& matches)

@@ -86,7 +86,7 @@ public:
 	initial_imu_pose.matrix().setZero();
 
 	if (use_ekf_pose_as_initial)
-		ekf_sub_ = nh.subscribe("/ekf_fusion/pose",3, &OdometerBase::ekfCallback, this);
+		ekf_sub_ = nh.subscribe(initial_pose_topic,3, &OdometerBase::ekfCallback, this);
 
 	// bag.open("/tmp/viso_ros_pose.bag",rosbag::bagmode::Write);
 	loadCameraImuTransform();

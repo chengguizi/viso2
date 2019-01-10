@@ -3,7 +3,7 @@
 	<node pkg="viso2_ros" type="stereo_odometer" name="stereo_odometer" output="screen">
 		<!-- Main() -->
 		
-		<param name="variance_scale" type="double" value="0.0001" /> 
+		<param name="variance_scale" type="double" value="0.001" /> <!-- Good Defualt 0.002 -->
 		<param name="visualisation_on" type="bool" value="true" /> 
 
 		<!-- Stereo Processor -->
@@ -34,7 +34,7 @@
 		<!-- Stereo Odometry Main Class -->
 		<param name="use_ekf_pose_as_initial" type="bool" value="true" />
 		
-		<param name="initial_pose_topic" type="str" value="/ekf_fusion/pose" />
+		<param name="initial_pose_topic" type="str" value="/ekf_fusion/pose_local" />
 
 		<param name="ref_frame_change_method" type="str" value="flow" /> <!-- "flow" "inlier" -->
 		<param name="ref_frame_motion_threshold" type="double" value="30.0" />

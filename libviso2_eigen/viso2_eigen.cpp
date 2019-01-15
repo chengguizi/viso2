@@ -103,6 +103,22 @@ bool Viso2Eigen::process(const cv::Mat& leftImage, const cv::Mat& rightImage, Vi
         qm->bucketKeyPoints(keys_l2);
         qm->bucketKeyPoints(keys_r2);
 
+        if ((keys_l2.size() + keys_r2.size()) / 2.0 < 20){
+
+            keys_l2.clear();
+            keys_r2.clear();
+
+            detector->setThreshold(fast_th * 0.6);
+
+            std::cout << "Lower FAST threshold because few number of features" << std::endl;
+
+            detector->detect(leftImage,keys_l2);
+            detector->detect(rightImage,keys_r2);
+
+            qm->bucketKeyPoints(keys_l2);
+            qm->bucketKeyPoints(keys_r2);
+        }
+
         auto extractor = cv::xfeatures2d::BriefDescriptorExtractor::create(/*int 	bytes = 32, bool 	use_orientation = false*/);
 
         
@@ -121,33 +137,45 @@ bool Viso2Eigen::process(const cv::Mat& leftImage, const cv::Mat& rightImage, Vi
             cv::Mat leftImage_half, rightImage_half;
             std::vector< cv::KeyPoint > keys_l2_half, keys_r2_half;
 
-            const double scale = 1.0/8.0;
+            const double scale = 1.0/4.0;
             cv::resize(leftImage, leftImage_half, cv::Size(), scale, scale);
             cv::resize(rightImage, rightImage_half, cv::Size(), scale, scale);
 
             detector->detect(leftImage_half,keys_l2_half);
             detector->detect(rightImage_half,keys_r2_half);
 
+            // std::cout << "Bucketing octave 1: " << std::endl;
             qm->bucketKeyPoints(keys_l2_half,1/scale);
             qm->bucketKeyPoints(keys_r2_half,1/scale);
+
+            
+
+            // for (auto &key : keys_l2_half)
+            //     std::cout << "key: " << key.pt.x << ", " << key.pt.y << std::endl;
+
+            // std::cout << "keys_l2_half.size() =  " << keys_l2_half.size() << ", keys_r2_half.size() = " << keys_r2_half.size() << std::endl;
 
             std::vector <bitset> des_l2_half, des_r2_half;
             descriptors.release();
             extractor->compute(leftImage_half, keys_l2_half, descriptors);
             mat2Bitset(descriptors, des_l2_half);
 
+            // std::cout << "leftImage_half.size() = " <<  leftImage_half.rows << ", " << leftImage_half.cols << std::endl;
+
             descriptors.release();
             extractor->compute(rightImage_half, keys_r2_half, descriptors);
             mat2Bitset(descriptors, des_r2_half);
 
-            for (auto &key : keys_l2_half){
+            // std::cout << "keys_l2_half.size() =  " << keys_l2_half.size() << ", keys_r2_half.size() = " << keys_r2_half.size() << std::endl;
+
+            for (cv::KeyPoint &key : keys_l2_half){
                 key.octave = 1;
                 key.pt.x /=scale;
                 key.pt.y /=scale;
             }
                 
             
-            for (auto &key : keys_r2_half){
+            for (cv::KeyPoint &key : keys_r2_half){
                 key.octave = 1;
                 key.pt.x /=scale;
                 key.pt.y /=scale;
@@ -231,7 +259,7 @@ bool Viso2Eigen::process(const cv::Mat& leftImage, const cv::Mat& rightImage, Vi
 
         bool sme_result = false;
         auto begin = std::chrono::steady_clock::now();
-        if (matches_quad_vec.size() < 10)
+        if (matches_quad_vec.size() < 8)
         {
             std::cerr << "Total poll of matches is too small < " << matches_quad_vec.size() << ", waiting for the next frame " << std::endl;
         }else{

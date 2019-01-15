@@ -85,7 +85,7 @@ private:
                                 double scale = 1.0);
 
     
-
+    const double maximum_distance_ratio = 0.3;
     inline int findMatch(   const TDescriptor &query, const std::vector<TDescriptor> *targets );
     inline int findMatch(   const std::vector<int> &inside_bucket, const TDescriptor &query,
                             const std::vector<TDescriptor> *targets );
@@ -339,10 +339,14 @@ template<class TDescriptor, class TFeature>
 std::vector<int> QuadMatcher<TDescriptor, TFeature>::getEpipolarBucketPoints(
         const cv::KeyPoint &key, const std::vector< std::vector<int> > &bucket, const HorizontalConstraint constraint)
 {
+
+    // Determine offset sign based on left-right or right-left matching
+    const int offset = (constraint == LEFT_ONLY) ? param.epipolar_offset : - param.epipolar_offset; // RIGHT_ONLY means left->right matching
+
     // Assume ROW MAJOR bucketing
 
-    const float lower_bound_y = std::max( 0.f  , key.pt.y - param.epipolar_tolerance) ; // top-left origin x == width direction, https://stackoverflow.com/questions/25642532/opencv-pointx-y-represent-column-row-or-row-column
-    const float upper_bound_y = std::min( param.image_height - 1.f, key.pt.y + param.epipolar_tolerance );
+    const float lower_bound_y = std::max( 0.f  , key.pt.y + offset - param.epipolar_tolerance) ; // top-left origin x == width direction, https://stackoverflow.com/questions/25642532/opencv-pointx-y-represent-column-row-or-row-column
+    const float upper_bound_y = std::min( param.image_height - 1.f, key.pt.y + offset + param.epipolar_tolerance );
 
     const float lower_bound_x = ( constraint == RIGHT_ONLY ? key.pt.x : 0);
     const float upper_bound_x = ( constraint == LEFT_ONLY ? key.pt.x : param.image_width-1 );
@@ -422,7 +426,10 @@ int QuadMatcher<TDescriptor, TFeature>::findMatch(const TDescriptor &query,
     // If the best match is much better than the second best, then it is most probably a good match (SNR good)
     if ( best_dist_1 / (double)best_dist_2 < param.max_neighbor_ratio)
     {
-        return best_i;
+        if (maximum_distance_ratio * query.size() > best_dist_1)
+            return best_i;
+        else
+            return -1; // even the best candidate has a distance too large
     }
     return -1;
 }
@@ -431,7 +438,7 @@ template<class TDescriptor, class TFeature>
 int QuadMatcher<TDescriptor, TFeature>::findMatch( const std::vector<int> &inside_bucket, const TDescriptor &query,
                             const std::vector<TDescriptor> *targets )
 {
-    const double maximum_distance_ratio = 0.5;
+    
     int best_dist_1 = 1e9;
     int best_dist_2 = 1e9;
     int best_i = -1;

@@ -32,6 +32,8 @@ namespace viso2_ros
 
 		//// Stereo Processor
 		int queue_size;
+		bool use_different_stereo_calibration;
+		bool skip_update_upon_jitter;
 
 		std::string left_topic, right_topic;
 		std::string left_info_topic, right_info_topic;
@@ -104,13 +106,16 @@ namespace viso2_ros
 		// ROS_ASSERT(local_nh.getParam("moving_object_polygons", 			params.moving_object_topics));
 
 		//// Stereo Processor
+		ROS_ASSERT(local_nh.getParam("use_different_stereo_calibration",params.use_different_stereo_calibration));
 		ROS_ASSERT(local_nh.getParam("queue_size", 						params.queue_size));
 		ROS_ASSERT(local_nh.getParam("left_topic", 						params.left_topic));
 		ROS_ASSERT(local_nh.getParam("right_topic", 					params.right_topic));
 		ROS_ASSERT(local_nh.getParam("left_info_topic", 				params.left_info_topic));
 		ROS_ASSERT(local_nh.getParam("right_info_topic", 				params.right_info_topic));
 
-		ROS_ASSERT(local_nh.getParam("variance_scale", 				params.variance_scale));
+		ROS_ASSERT(local_nh.getParam("variance_scale", 					params.variance_scale));
+
+		ROS_ASSERT(local_nh.getParam("skip_update_upon_jitter", 		params.skip_update_upon_jitter));
 
 		//// Main()
 		ROS_ASSERT(local_nh.getParam("visualisation_on", 				params.visualisation_on));
@@ -129,6 +134,7 @@ namespace viso2_ros
 		out << "  number_of_buckets_in_width    = " << params.n_bucket_width << std::endl;
 		out << "  number_of_buckets_in_height   = " << params.n_bucket_height << std::endl;
 		out << "  epipolar_tolerance            = " << params.epipolar_tolerance << std::endl;
+		out << "  epipolar_offset            	= " << params.epipolar_offset << std::endl;
 		out << "  max_neighbor_ratio            = " << params.max_neighbor_ratio << std::endl;
 		out << "  use_bucketing                 = " << params.use_bucketing << std::endl;
 		out << "  compulte_scaled_keys          = " << params.compulte_scaled_keys << std::endl;
@@ -148,10 +154,11 @@ namespace viso2_ros
 
 		out << "  good_point_thres_scale= " << params.good_point_threshold_scale << std::endl;
 
-		out << "  baseline              = " << params.calib.baseline << std::endl;
-		out << "  calib_f               = " << params.calib.f << std::endl;
-		out << "  calib_cu              = " << params.calib.cu << std::endl;
-		out << "  calib_cv              = " << params.calib.cv << std::endl;
+		out << "  baseline (left,right) = " << params.calib_left.baseline << ", " << params.calib_right.baseline << std::endl;
+		out << "  calib_fx               = " << params.calib_left.fx << ", " << params.calib_right.fx << std::endl;
+		out << "  calib_fy               = " << params.calib_left.fy << ", " << params.calib_right.fy << std::endl;
+		out << "  calib_cu              = " << params.calib_left.cu << ", " << params.calib_right.cu << std::endl;
+		out << "  calib_cv              = " << params.calib_left.cv << ", " << params.calib_right.cv << std::endl;
 		return out;
 	}
 
@@ -172,10 +179,12 @@ namespace viso2_ros
 		// out << "  moving_object_polygons		= " << params.moving_object_topics << std::endl;
 
 		out << "  queue_size                    = " << params.queue_size << std::endl;
+		out << "  use_different_stereo_calibration = " << params.use_different_stereo_calibration << std::endl;
 		out << "  left_topic                    = " << params.left_topic << std::endl;
 		out << "  right_topic                   = " << params.right_topic << std::endl;
 		out << "  left_info_topic               = " << params.left_info_topic << std::endl;
 		out << "  right_info_topic              = " << params.right_info_topic << std::endl;
+		out << "  skip_update_upon_jitter       = " << params.skip_update_upon_jitter << std::endl;
 
 		out << "  visualisation_on              = " << params.visualisation_on << std::endl;
 

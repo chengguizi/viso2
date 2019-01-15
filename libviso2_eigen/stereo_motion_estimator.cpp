@@ -23,18 +23,17 @@
 
 void StereoMotionEstimator::setParam(StereoMotionEstimatorParam::Parameters &param) { 
 
-    assert (param.calib.cu != 0 && param.calib.cv != 0);
+    assert (param.calib_left.cu != 0 && param.calib_left.cv != 0);
+	assert (param.calib_right.cu != 0 && param.calib_right.cv != 0);
 
     this->param = param; 
     initialised = true;
     std::cout << std::endl << "StereoMotionEstimator parameters loaded!" << std::endl;
     std::cout << "- image size " << param.image_width << "x" << param.image_height << std::endl;
     std::cout << "- RANSAC iterations " << param.ransac_iters << std::endl;
-    std::cout << "- baseline=" << this->param.calib.baseline << ", f=" << this->param.calib.f << ", cu=" << this->param.calib.cu << 
-        ", cv=" << this->param.calib.cv << std::endl;
     std::cout << "==============================================================" << std::endl;
 
-	good_point_threshold = param.good_point_threshold_scale * param.calib.f * param.calib.baseline;
+	good_point_threshold = param.good_point_threshold_scale * param.calib_left.fx * param.calib_left.baseline;
 
 	std::cout << "good_point_threshold = " << good_point_threshold << std::endl;
 }
@@ -175,9 +174,15 @@ std::vector<double> StereoMotionEstimator::estimateMotion()
     p_observe.resize(4 * N);
     p_residual.resize(4 * N);
 
-    double &_cu = param.calib.cu;
-    double &_cv = param.calib.cv;
-    double &_f = param.calib.f;
+    const double &left_cu = param.calib_left.cu;
+    const double &left_cv = param.calib_left.cv;
+    const double &left_fx = param.calib_left.fx;
+	// const double &left_fy = param.calib_left.fy;
+
+	const double &right_cu = param.calib_right.cu;
+    // const double &right_cv = param.calib_right.cv;
+    // const double &right_fx = param.calib_right.fx;
+	// const double &right_fy = param.calib_right.fy;
 
 	// project matches of previous image into 3d
 
@@ -188,21 +193,26 @@ std::vector<double> StereoMotionEstimator::estimateMotion()
 	const double max_z = good_point_threshold;
 	const double min_z = good_point_threshold / 10.0;
 
+	const double d_offset_x = - left_cu + right_cu;
+	// const double d_offset_y = - left_cv + right_cv;
+
 	for (size_t i = 0; i < (*matches_quad_vec).size() ; i++ )
 	{
 		const cv::KeyPoint &keyl1 = (*keyl1_vec)[ (*matches_quad_vec)[i][L1] ];
 		const cv::KeyPoint &keyr1 = (*keyr1_vec)[ (*matches_quad_vec)[i][R1] ];
 
-		// if ( keyl1.pt.x - keyr1.pt.x < 0.0 )
-		// {
-		// 	std::cerr << "Warning: Flipped match at " << i << std::endl;
-		// }
+		double d = keyl1.pt.x - keyr1.pt.x + d_offset_x;
 
-		double d = std::max( keyl1.pt.x - keyr1.pt.x, 0.0001f);			// d = xl - xr
-		X[i] = (keyl1.pt.x - _cu) * param.calib.baseline / d;				// X = (u1p - calib.cu)*baseline/d
-		Y[i] = (keyl1.pt.y - _cv) * param.calib.baseline / d;				// Y = (v1p - calib.cv)*baseline/d
-		Z[i] = _f * param.calib.baseline / d;									// Z = f*baseline/d
+		if ( d < 0.0 )
+			std::cerr << "Warning: Flipped match at " << i << ", d = " << d << std::endl;
 
+		d = std::max( d, 0.0001);													// d = xl - xr
+		X[i] = (keyl1.pt.x - left_cu) * param.calib_left.baseline / d;				// X = (u1p - calib.cu)*baseline/d
+		Y[i] = (keyl1.pt.y - left_cv) * param.calib_left.baseline / d;				// Y = (v1p - calib.cv)*baseline/d
+		Z[i] = left_fx * param.calib_left.baseline / d;								// Z = f*baseline/d
+
+		// DEBUG
+		// std::cout << "Z[" << i << "] = " << Z[i] << std::endl;
 		// accumulate count for good points
 		if (Z[i] < good_point_threshold)
 			num_good_points++;
@@ -230,6 +240,8 @@ std::vector<double> StereoMotionEstimator::estimateMotion()
 
 	std::vector<int> best_active;
 	double best_confidence = 0;
+
+	double highest_inlier = 0; // DEBUG
 
 	// // initial RANSAC estimate
 	int max_iteration = N*N*N / 5;
@@ -360,6 +372,8 @@ std::vector<double> StereoMotionEstimator::estimateMotion()
 		// Update best inlier buffer if we have more inliers
         std::vector<int> inliers_curr = getInlier(tr_delta_curr);
 
+		if (highest_inlier < inliers_curr.size())
+			highest_inlier = inliers_curr.size();
 
 		double confidence_curr = getInlierConfidence(inliers_curr);
 
@@ -380,7 +394,7 @@ std::vector<double> StereoMotionEstimator::estimateMotion()
         }
 	}
 
-    std::cout << "Best inlier: " << inliers.size() << " out of " << N << ", confidence = " << best_confidence << std::endl;
+    std::cout << "Best inlier: " << inliers.size() << " out of " << N << ", confidence = " << best_confidence << ", highest no. of inliers = " << highest_inlier << std::endl;
 
 	// Sanity Check
 	if ( inliers.size() / (double)N < param.inlier_ratio_min )
@@ -612,8 +626,10 @@ std::vector<int> StereoMotionEstimator::getInlier(std::vector<double> &tr)
 double StereoMotionEstimator::getInlierConfidence(const std::vector<int> &inliers, bool is_debug)
 {
 	const int N_zone = 10;
-	const int minimum_inlier_count = 5;
 
+	const int N = matches_quad_vec->size();
+	const int minimum_inlier_count = 3;
+	
     const int I = inliers.size();
 
 
@@ -624,8 +640,12 @@ double StereoMotionEstimator::getInlierConfidence(const std::vector<int> &inlier
 		return 0.0;
 	}
 
-	double confidence_inlier = 1.0 - 1.0 / (I - minimum_inlier_count + 1.0); // Higher the inlier, higher the confidence
+	double confidence_inlier_absolute = 1.0 - 1.0 / (I - minimum_inlier_count + 1.0); // Higher the inlier, higher the confidence
 
+	// use ratio instead
+	double confidence_inlier_relative = (double)I / N;
+
+	double confidence_inlier = confidence_inlier_absolute*0.5 + confidence_inlier_relative*0.5;
 
 	//// CONFIDENCE FOR INLIER DEPTH ZONES
 	std::vector<int> zone(N_zone,0);
@@ -661,7 +681,7 @@ double StereoMotionEstimator::getInlierConfidence(const std::vector<int> &inlier
 	// DEBUG
 	if (is_debug)
 	{
-		std::cout  << "zone: ";
+		std::cout  << "zone: (near -> far) ";
 		for (int i = 0 ; i < N_zone; i++ )
 		{
 			std::cout << (zone[i] >= 1);
@@ -681,7 +701,7 @@ double StereoMotionEstimator::getInlierConfidence(const std::vector<int> &inlier
 	double area = getConvexHullArea(pts);
 
 	const double total_area = param.image_width * param.image_height;
-	double confidence_area = std::tanh(10.0 * area / total_area);
+	double confidence_area = std::tanh(20.0 * area / total_area);
 
 	double confidence = confidence_inlier * confidence_zone * confidence_area;
 
@@ -696,9 +716,9 @@ double StereoMotionEstimator::getInlierConfidence(const std::vector<int> &inlier
 void StereoMotionEstimator::computeResidualsAndJacobian(const std::vector<double> &tr, const std::vector<int> &active, bool inlier_mode)
 {
 
-    const double &_cu = param.calib.cu;
-    const double &_cv = param.calib.cv;
-    const double &_f = param.calib.f;
+    // const double &_cu = param.calib_left.cu;
+    // const double &_cv = param.calib_left.cv;
+    // const double &_f = param.calib_left.fx;
     
 	// extract motion parameters
 	const double &rx = tr[0]; const double &ry = tr[1]; const double &rz = tr[2];
@@ -741,13 +761,13 @@ void StereoMotionEstimator::computeResidualsAndJacobian(const std::vector<double
 		double Y1c = r10*X1p + r11*Y1p + r12*Z1p + ty;
 		double Z1c = r20*X1p + r21*Y1p + r22*Z1p + tz;
 
-		// weighting   hm: (centre points are given up to 20x of weight, only in x-axis)
+		// weighting   hm: (centre points are given up to 3x of weight, only in x-axis)
 		double weight = 1.0;
 		if (param.reweighting)
-			weight = 1.0 / (fabs(p_observe[4 * i + 0] - _cu) / fabs(_cu) + 0.5);   // only for current left image
+			weight = 1.0 / (fabs(p_observe[4 * i + 0] - param.calib_left.cu) / fabs(param.calib_left.cu) + 0.5) * 0.5;   // only for current left image
 
 		// compute 3d point in current right coordinate system
-		double X2c = X1c - param.calib.baseline;
+		double X2c = X1c - param.calib_left.baseline; // param.calib_left.baseline ==  param.calib_right.baseline
 
 		// for all paramters do  // six parameters: 3 rotations and 3 translations
 		for (int j = 0; !inlier_mode && j < 6; j++)
@@ -774,17 +794,17 @@ void StereoMotionEstimator::computeResidualsAndJacobian(const std::vector<double
 			}
 
 			// set jacobian entries (project via K)
-			J[(4 * i + 0) * 6 + j] = weight*_f*(X1cd*Z1c - X1c*Z1cd) / (Z1c*Z1c); // left u'
-			J[(4 * i + 1) * 6 + j] = weight*_f*(Y1cd*Z1c - Y1c*Z1cd) / (Z1c*Z1c); // left v'
-			J[(4 * i + 2) * 6 + j] = weight*_f*(X1cd*Z1c - X2c*Z1cd) / (Z1c*Z1c); // right u'
-			J[(4 * i + 3) * 6 + j] = weight*_f*(Y1cd*Z1c - Y1c*Z1cd) / (Z1c*Z1c); // right v'
+			J[(4 * i + 0) * 6 + j] = weight* param.calib_left.fx *(X1cd*Z1c - X1c*Z1cd) / (Z1c*Z1c); // left u'
+			J[(4 * i + 1) * 6 + j] = weight* param.calib_left.fy *(Y1cd*Z1c - Y1c*Z1cd) / (Z1c*Z1c); // left v'
+			J[(4 * i + 2) * 6 + j] = weight* param.calib_right.fx *(X1cd*Z1c - X2c*Z1cd) / (Z1c*Z1c); // right u'
+			J[(4 * i + 3) * 6 + j] = weight* param.calib_right.fy *(Y1cd*Z1c - Y1c*Z1cd) / (Z1c*Z1c); // right v'
 		}
 
 		// set prediction (project via K)
-		p_predict[4 * i + 0] = _f*X1c / Z1c + _cu; // left center u
-		p_predict[4 * i + 1] = _f*Y1c / Z1c + _cv; // left v
-		p_predict[4 * i + 2] = _f*X2c / Z1c + _cu; // right u
-		p_predict[4 * i + 3] = _f*Y1c / Z1c + _cv; // right v
+		p_predict[4 * i + 0] = param.calib_left.fx * X1c / Z1c + param.calib_left.cu;; // left center u
+		p_predict[4 * i + 1] = param.calib_left.fy * Y1c / Z1c + param.calib_left.cv; // left v
+		p_predict[4 * i + 2] = param.calib_right.fx * X2c / Z1c + param.calib_right.cu; // right u
+		p_predict[4 * i + 3] = param.calib_right.fy * Y1c / Z1c + param.calib_right.cv; // right v
 
 		// set residuals
 		p_residual[4 * i + 0] = weight*(p_observe[4 * i + 0] - p_predict[4 * i + 0]);

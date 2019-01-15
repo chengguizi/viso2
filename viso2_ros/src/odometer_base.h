@@ -44,9 +44,9 @@ private:
 	// ros::ServiceServer reset_service_;
 
 	// tf related
-	const std::string sensor_frame_id_ = "camera_frame";
-	const std::string odom_frame_id_ = "visual_frame";
-	const std::string base_link_frame_id_ = "imu_frame";
+	// const std::string sensor_frame_id_ = "camera_frame";
+	const std::string odom_frame_id_ = "map";
+	const std::string base_link_frame_id_ = "camera";
 
 	// tf2_ros::TransformBroadcaster tf_broadcaster_;
 
@@ -167,7 +167,7 @@ protected:
 			assert(!initial_imu_pose.matrix().isZero());
 			integrated_vo_pose_ = integrated_vo_pose_ * delta_transform; // HM: behave like matrix multiplication in homogenous coordinates
 			
-			Eigen::Affine3d integrated_p_iw = initial_imu_pose * Tr_ci * integrated_vo_pose_;
+			Eigen::Affine3d integrated_p_iw = initial_imu_pose * Tr_ci * integrated_vo_pose_ * Tr_ci.inverse();
 
 			geometry_msgs::Pose integrated_vo_pose_msg = tf2::toMsg(integrated_p_iw);
 
@@ -194,6 +194,16 @@ protected:
 			pose_pub_.publish(pose_msg);
 
 			// bag.write("pose_msg",ros::Time::now(),odometry_msg);
+
+			std::cout << std::setw(8) << "Global pose (x,y,z) = " << pose_msg.pose.pose.position.x 
+				<< ", " << pose_msg.pose.pose.position.y 
+				<< ", " << pose_msg.pose.pose.position.z << std::endl;
+			
+			std::cout << std::setw(8) << "Global orientation (w,x,y,z) = " << pose_msg.pose.pose.orientation.w
+				<< ", " << pose_msg.pose.pose.orientation.x
+				<< ", " << pose_msg.pose.pose.orientation.y
+				<< ", " << pose_msg.pose.pose.orientation.z << std::endl;
+
 
 		} // end of publishing integrated pose / odometry
 
@@ -247,14 +257,16 @@ protected:
 			ROS_WARN("Will wait for EKF initial pose, before publishing odometry and pose");
 			isGlobalPoseEnabled = false;
 		}else{
-			ROS_WARN("Will use ENU as initial pose, publishing odometry and pose");
+			ROS_WARN("Will use NWU as initial pose, publishing odometry and pose");
 			isGlobalPoseEnabled = true;
-			initial_imu_pose.setIdentity();
-			Eigen::Matrix3d R_sw;
-			R_sw << -1, 0 ,0,
-					0, 1, 0,
-					0 , 0 , -1;
-			initial_imu_pose.rotate(R_sw);
+			initial_imu_pose.setIdentity(); // make the first "imu" frame the world frame
+
+			Eigen::Matrix3d R_ci;
+			R_ci << 0, 0 ,1,
+					-1, 0, 0,
+					0 , -1 , 0;
+			Tr_ci.setIdentity();
+			Tr_ci.rotate(R_ci); // right rotation
 		}
 	}
 

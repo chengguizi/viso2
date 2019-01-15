@@ -11,6 +11,7 @@ namespace QuadMatcherParam{
         // The number of rows and columns that each image will be bucketed into.
         // Generally the height of the each bucket should be smaller, to better imposed the epipolar constraints
         int n_bucket_width = 8, n_bucket_height = 8;
+        int epipolar_offset = 0; // This is used when the two cameras' cv or Ty are not perfectly aligned
         int epipolar_tolerance = 10;
         double max_neighbor_ratio = 0.6;
         bool use_bucketing= true;
@@ -28,7 +29,8 @@ namespace StereoMotionEstimatorParam{
     // camera parameters (all are mandatory / need to be supplied)
     struct Calibration {
         double baseline = 1.0;             // baseline (meters)
-        double f = 1;                       // focal length (in pixels)
+        double fx = 1;                       // focal length (in pixels)
+        double fy = 1;                       // focal length (in pixels)
         double cu = 0;                      // principal point (u-coordinate) aka width
         double cv = 0;                      // principal point (v-coordinate) aka height
     };
@@ -45,7 +47,8 @@ namespace StereoMotionEstimatorParam{
 
         double good_point_threshold_scale = 0.5;
 
-        Calibration calib;
+        Calibration calib_left;
+        Calibration calib_right;
 	};
 
 }

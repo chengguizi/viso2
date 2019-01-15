@@ -1,6 +1,7 @@
 #include <ros/ros.h>
 #include <sensor_msgs/image_encodings.h>
 #include <image_geometry/stereo_camera_model.h>
+#include <image_geometry/pinhole_camera_model.h>
 #include <cv_bridge/cv_bridge.h>
 
 #include <viso2_eigen/viso2_eigen.h>
@@ -92,18 +93,61 @@ protected:
 
 	void initOdometer(	const sensor_msgs::CameraInfoConstPtr& l_info_msg,
 						const sensor_msgs::CameraInfoConstPtr& r_info_msg){
-		// read calibration info from camera info message
-		// to fill remaining parameters
-		image_geometry::StereoCameraModel model;
-		model.fromCameraInfo(*l_info_msg, *r_info_msg); // http://wiki.ros.org/image_pipeline/CameraInfo
+		
+		if (!param.use_different_stereo_calibration){
+			// read calibration info from camera info message
+			// to fill remaining parameters
+			image_geometry::StereoCameraModel model;
+			model.fromCameraInfo(*l_info_msg, *r_info_msg); // http://wiki.ros.org/image_pipeline/CameraInfo
+			param.sme_param.calib_left.baseline = model.baseline(); // calculated as -right_.Tx() / right_.fx(); fx() is defined in pixels. baseline is in meter
+			// Note: the Tx() in ROS is defined as   -(baseline (meter) * focal length (pixel)), not just baseline alone!
+			// https://docs.opencv.org/2.4/modules/calib3d/doc/camera_calibration_and_3d_reconstruction.html
+			param.sme_param.calib_left.fx = model.left().fx(); // in pixels
+			param.sme_param.calib_left.fy = model.left().fy(); // in pixels
+			param.sme_param.calib_left.cu = model.left().cx();
+			param.sme_param.calib_left.cv = model.left().cy();
+			param.sme_param.calib_right = param.sme_param.calib_left;
+			ROS_WARN("Using the same calibration for left and right image sensors.");
 
-		// StereoMotionEstimatorParam::Calibration calib;
-		param.sme_param.calib.baseline = model.baseline(); // calculated as -right_.Tx() / right_.fx(); fx() is defined in pixels. baseline is in meter
-		// Note: the Tx() in ROS is defined as   -(baseline (meter) * focal length (pixel)), not just baseline alone!
-		// https://docs.opencv.org/2.4/modules/calib3d/doc/camera_calibration_and_3d_reconstruction.html
-		param.sme_param.calib.f = model.left().fx(); // in pixels
-		param.sme_param.calib.cu = model.left().cx();
-		param.sme_param.calib.cv = model.left().cy();
+		}else{
+			image_geometry::PinholeCameraModel model_left, model_right;
+
+			model_left.fromCameraInfo(*l_info_msg);
+			model_right.fromCameraInfo(*r_info_msg);
+
+			const double left_Tz = model_left.projectionMatrix()(2,3);
+			const double right_Tz = model_right.projectionMatrix()(2,3);
+
+			ROS_ASSERT(model_left.Tx() == 0); // left camera should be at origin
+			ROS_ASSERT(model_left.Ty() == 0);
+			ROS_ASSERT(left_Tz == 0);
+
+			param.sme_param.calib_left.baseline = - model_right.Tx() / model_right.fx(); // only take care of baseline along x-axis
+			param.sme_param.calib_left.fx = model_left.fx();
+			param.sme_param.calib_left.fy = model_left.fy();
+			ROS_ASSERT( std::abs((model_left.fx() - model_left.fy()) / model_left.fy()) < 1e-2 ); // difference between fx and fy should be small
+			param.sme_param.calib_left.cu = model_left.cx();
+			param.sme_param.calib_left.cv = model_left.cy();
+
+			param.sme_param.calib_right.baseline = param.sme_param.calib_left.baseline;
+			param.sme_param.calib_right.fx = model_right.fx();
+			param.sme_param.calib_right.fy = model_right.fy();
+			ROS_ASSERT( std::abs((model_right.fx() - model_right.fy()) / model_right.fy()) < 1e-2 ); // difference between fx and fy should be small
+			param.sme_param.calib_right.cu = model_right.cx();
+			param.sme_param.calib_right.cv = model_right.cy();
+
+			const double &baseline = param.sme_param.calib_left.baseline;
+			ROS_ASSERT(std::abs(- model_right.Ty() / model_right.fy() / baseline ) < 1e-3); // Ty for right should be negligible
+			ROS_ASSERT(std::abs(- right_Tz / baseline ) < 1e-3); // Tz for right should be negligible
+
+			// Set epipolar offset for Quadmatcher
+			param.qm_param.epipolar_offset = - model_left.cy() + (-model_right.Ty()) + model_right.cy() ;
+			ROS_INFO_STREAM("epipolar_offset = " << param.qm_param.epipolar_offset);
+
+			ROS_WARN("Using DIFFERENT calibrations for left and right image sensors.");
+			ROS_INFO_STREAM("Right Camera (scaled): Tx() = " << model_right.Tx() << ", Ty() = " << model_right.Ty() << ", Tz() = " << right_Tz);
+			ROS_INFO_STREAM("Right Camera (in meter): Tx() = " << - model_right.Tx() / model_right.fx() << ", Ty() = " << - model_right.Ty() / model_right.fy()  << ", Tz() = " << -right_Tz);
+		}
 
 		viso2->setParam(l_info_msg->width, l_info_msg->height, param.qm_param, param.sme_param);
 		//if (l_info_msg->header.frame_id != "") setSensorFrameId(l_info_msg->header.frame_id);
@@ -206,7 +250,13 @@ protected:
 			{
 				if (std::abs(jitter/avg_time_gap) > 0.3){
 					ROS_ERROR_STREAM("Jitter Detected: average_gap=" << avg_time_gap << ", but current=" << delta_t);
-					mode = Viso2Eigen::Mode::FIRST_FRAME;
+
+					if (param.skip_update_upon_jitter)
+					{
+						mode = Viso2Eigen::Mode::FIRST_FRAME;
+						ROS_ERROR("Clear Viso2 Process, and restart from the first frame...");
+					}
+						
 					// avg_time_gap = avg_time_gap*0.98 + delta_t*0.02;
 
 					if (jitter / avg_time_gap < -0.3){

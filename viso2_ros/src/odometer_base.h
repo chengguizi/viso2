@@ -167,7 +167,7 @@ protected:
 			assert(!initial_imu_pose.matrix().isZero());
 			integrated_vo_pose_ = integrated_vo_pose_ * delta_transform; // HM: behave like matrix multiplication in homogenous coordinates
 			
-			Eigen::Affine3d integrated_p_iw = initial_imu_pose * Tr_ci * integrated_vo_pose_ * Tr_ci.inverse();
+			Eigen::Affine3d integrated_p_iw = initial_imu_pose * Tr_ci * integrated_vo_pose_ * Tr_ci.inverse() * initial_imu_pose.inverse() ;
 
 			geometry_msgs::Pose integrated_vo_pose_msg = tf2::toMsg(integrated_p_iw);
 

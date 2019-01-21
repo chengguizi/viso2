@@ -11,6 +11,8 @@
 		<param name="right_topic" type="str" value="/stereo/right/image_rect_raw" />
 		<param name="left_info_topic" type="str" value="/stereo/left/camera_info" />
 		<param name="right_info_topic" type="str" value="/stereo/right/camera_info" />
+
+		<param name="use_different_stereo_calibration" type="bool" value="false" /> 
 		<param name="queue_size" type="int" value="20" />
 
 		<!-- QuadMatcher -->

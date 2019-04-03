@@ -123,7 +123,7 @@ QuadMatcher<TDescriptor, TFeature>::QuadMatcher() : initialised(false), data_rea
     bucketr1.resize(num_bucket);
     bucketl2.resize(num_bucket);
     bucketr2.resize(num_bucket);
-};
+}
 
 ///////////////////////////////////////////////////////////////////////
 //// Implementation of Public Member Functions

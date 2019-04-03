@@ -1,6 +1,8 @@
 <launch>
-
-	<node pkg="viso2_ros" type="stereo_odometer" name="stereo_odometer" output="screen">
+	<!-- launch-prefix="xterm -e gdb -\-args" -->
+	<node pkg="viso2_ros" type="stereo_odometer" name="stereo_odometer" output="screen"
+	
+	>
 		<!-- Main() -->
 		
 		<param name="variance_scale" type="double" value="0.001" /> <!-- Good Defualt 0.002 -->

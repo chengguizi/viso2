@@ -351,7 +351,7 @@ protected:
 
 			std::cout  << "flow: " << opticalFlow << std::endl;
 
-			assert (voState.tfStamped.size() == state_idx_next + 1);
+			assert (voState.tfStamped.size() == (size_t) (state_idx_next + 1) );
 
 			if ( opticalFlow < param.ref_frame_motion_threshold * param.ref_frame_motion_threshold )
 			{
@@ -365,7 +365,7 @@ protected:
 		//////////////////////////////////////
 
 
-		int matched_size = viso2->getMatchedSize();
+		// int matched_size = viso2->getMatchedSize();
 		double confidence = viso2->getConfidence();
 
 		double delta_t = (voState.tfStamped[state_idx].stamp - voState.tfStamped[state_idx-1].stamp)/1.0e9;
@@ -465,7 +465,7 @@ int main(int argc, char **argv)
 	std::string transport = argc > 1 ? argv[1] : "raw";
 	viso2_ros::StereoOdometer odometer(transport, param);
 
-	uint64_t seq_showed = 0;
+	// uint64_t seq_showed = 0;
 
 	ros::AsyncSpinner spinner(2);
 	spinner.start();

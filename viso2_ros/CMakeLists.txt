@@ -1,12 +1,15 @@
 ### NO.1 CMake Version
 cmake_minimum_required(VERSION 3.5)
 
+set(CMAKE_CXX_COMPILER g++-7)
+set(CMAKE_C_COMPILER gcc-7)
+
 ### NO.2 Project Name
 project(viso2_ros)
 
 # enable C++11 standard (current directory scope)
-set(CMAKE_CXX_STANDARD 11)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
+# set(CMAKE_CXX_STANDARD 17)
+# set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
   set(CMAKE_BUILD_TYPE Release CACHE STRING "Choose the type of build." FORCE)
@@ -14,9 +17,9 @@ if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
     "MinSizeRel" "RelWithDebInfo")
 endif()
 
-# set(CMAKE_CXX_FLAGS "-Wall -Wextra")
+set(CMAKE_CXX_FLAGS "-Wall -Wextra -Wno-ignored-attributes -Wno-int-in-bool-context -pedantic -std=gnu++17 -fomit-frame-pointer -mavx2 -march=native -mfma -flto -funroll-all-loops -fpeel-loops -ftracer -ftree-vectorize")
 set(CMAKE_CXX_FLAGS_DEBUG "-g")
-set(CMAKE_CXX_FLAGS_RELEASE "-O3")
+set(CMAKE_CXX_FLAGS_RELEASE "-Ofast")
 
 ### NO.3 Fine other CMake / Catkin Packages needed for build
 find_package(catkin REQUIRED COMPONENTS 
@@ -51,6 +54,7 @@ generate_messages(
 )
 
 ### NO.7 Specify package build info export
+# This function must be called before declaring any targets with add_library() or add_executable().
 catkin_package(
   CATKIN_DEPENDS libviso2_eigen
 )

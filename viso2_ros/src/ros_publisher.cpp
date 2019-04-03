@@ -19,7 +19,7 @@ StereoCameraPublisher::StereoCameraPublisher()
 }
 
 
-StereoCameraPublisher::StereoCameraPublisher(ros::NodeHandle& nh) : _nh("~")
+StereoCameraPublisher::StereoCameraPublisher(ros::NodeHandle& nh) : _nh(nh)
 {
     init();
 }

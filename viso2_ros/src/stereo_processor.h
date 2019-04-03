@@ -40,12 +40,14 @@ private:
 	message_filters::Subscriber<sensor_msgs::CameraInfo> left_info_sub_, right_info_sub_;
 	typedef message_filters::sync_policies::ExactTime<sensor_msgs::Image, sensor_msgs::Image, sensor_msgs::CameraInfo, sensor_msgs::CameraInfo> ExactPolicy;
 	typedef message_filters::Synchronizer<ExactPolicy> ExactSync;
-	ExactSync exact_sync_;
+	
 
 	// for sync checking
 	ros::WallTimer check_synced_timer_;
 	int left_received_, right_received_, left_info_received_, right_info_received_, all_received_;
-
+	
+	ExactSync exact_sync_;
+	
 	// for sync checking
 	static void increment(int* value){ ++(*value); }
 

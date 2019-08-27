@@ -34,7 +34,7 @@ find_package(catkin REQUIRED COMPONENTS
   std_srvs
   message_generation
 
-  dlib_ros
+  dutils_profiler
 )
 
 find_package(OpenCV REQUIRED)
@@ -51,9 +51,9 @@ generate_messages(
 )
 
 ### NO.7 Specify package build info export
-catkin_package(
-  CATKIN_DEPENDS libviso2_eigen
-)
+# catkin_package(
+#   CATKIN_DEPENDS libviso2_eigen
+# )
 
 #include_directories(include ${catkin_INCLUDE_DIRS})
 

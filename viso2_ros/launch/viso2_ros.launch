@@ -10,10 +10,10 @@
 		<param name="visualisation_on" type="bool" value="true" /> 
 
 		<!-- Stereo Processor -->
-		<param name="left_topic" type="str" value="/stereo/left/image_rect_raw" />
-		<param name="right_topic" type="str" value="/stereo/right/image_rect_raw" />
-		<param name="left_info_topic" type="str" value="/stereo/left/camera_info" />
-		<param name="right_info_topic" type="str" value="/stereo/right/camera_info" />
+		<param name="left_topic" type="str" value="/rs2_ros/stereo2/left/image_rect_raw" />
+		<param name="right_topic" type="str" value="/rs2_ros/stereo2/right/image_rect_raw" />
+		<param name="left_info_topic" type="str" value="/rs2_ros/stereo2/left/camera_info" />
+		<param name="right_info_topic" type="str" value="/rs2_ros/stereo2/right/camera_info" />
 
 		<param name="use_different_stereo_calibration" type="bool" value="false" /> 
 		<param name="queue_size" type="int" value="20" />

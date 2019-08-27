@@ -89,7 +89,11 @@ public:
 		ekf_sub_ = nh.subscribe(initial_pose_topic,3, &OdometerBase::ekfCallback, this);
 
 	// bag.open("/tmp/viso_ros_pose.bag",rosbag::bagmode::Write);
-	loadCameraImuTransform();
+	if (use_ekf_pose_as_initial)
+		loadCameraImuTransform();
+	else
+		Tr_ci.setIdentity();
+		
 	resetPose(0);
 	}
 

@@ -1,5 +1,8 @@
 <launch>
 
+	<arg name ="use_ekf_pose_as_initial" default="false" />
+	<arg name="skip_update_upon_jitter" default="false" />
+
 	<node pkg="viso2_ros" type="stereo_odometer" name="stereo_odometer" output="screen">
 		<!-- Main() -->
 		
@@ -7,12 +10,16 @@
 		<param name="visualisation_on" type="bool" value="true" /> 
 
 		<!-- Stereo Processor -->
-		<param name="left_topic" type="str" value="/comm_stereo_hlc/left/image_raw" />
-		<param name="right_topic" type="str" value="/comm_stereo_hlc/right/image_raw" />
-		<param name="left_info_topic" type="str" value="/comm_stereo_hlc/left/camera_info" />
-		<param name="right_info_topic" type="str" value="/comm_stereo_hlc/right/camera_info" />
+		<!-- <param name="left_topic" type="str" value="/zed/left/image_rect_color/" />
+		<param name="right_topic" type="str" value="/zed/right/image_rect_color/" /> -->
 
-		<param name="use_different_stereo_calibration" type="bool" value="true" /> 
+		<param name="left_topic" type="str" value="/zed/left/image_enhanced" />
+		<param name="right_topic" type="str" value="/zed/right/image_enhanced" />
+
+		<param name="left_info_topic" type="str" value="/zed/left/camera_info" />
+		<param name="right_info_topic" type="str" value="/zed/right/camera_info" />
+
+		<param name="use_different_stereo_calibration" type="bool" value="false" /> 
 		<param name="queue_size" type="int" value="20" />
 
 		<!-- QuadMatcher -->
@@ -26,15 +33,15 @@
 
 		<!-- StereoMotionEstimator -->
 		<param name="ransac_iters" type="int" value="250" />
-		<param name="inlier_threshold" type="double" value="4.0" />
-		<param name="inlier_ratio_min" type="double" value="0.4" />
+		<param name="inlier_threshold" type="double" value="3.0" />
+		<param name="inlier_ratio_min" type="double" value="0.6" />
 		<param name="reweighting" type="bool" value="true" />
 
 		<param name="good_point_threshold_scale" type="double" value="1" />
 		
 
 		<!-- Stereo Odometry Main Class -->
-		<param name="use_ekf_pose_as_initial" type="bool" value="false" />
+		<param name="use_ekf_pose_as_initial" type="bool" value="$(arg use_ekf_pose_as_initial)" />
 		
 		<param name="initial_pose_topic" type="str" value="/ekf_fusion/pose_local" />
 
@@ -50,10 +57,10 @@
 		<param name="noise_rotation" type="double" value="1.0e-4" /> 
 
 		<param name="change_delta_pose_to_velocity" type="bool" value="true" /> 
-		<param name="skip_update_upon_jitter" type="bool" value="false" /> 
+		<param name="skip_update_upon_jitter" type="bool" value="$(arg skip_update_upon_jitter)" /> 
 		<!-- <param name="moving_object_polygons" type="str" value="/arena_movidius/objects" /> -->
 
-		<!-- <rosparam file="$(find ssf_updates)/visionpose_sensor_fix_arena_glass.yaml"/> -->
+		<rosparam file="$(find ssf_updates)/visionpose_sensor_fix_arena_glass.yaml" if="$(arg use_ekf_pose_as_initial)"/>
 	</node>
 
 </launch>

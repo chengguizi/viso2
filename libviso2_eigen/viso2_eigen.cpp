@@ -2,13 +2,18 @@
 
 #include <opencv2/opencv.hpp>
 #include <opencv2/features2d.hpp>
-#include <opencv2/xfeatures2d.hpp>
+#include <opencv2/xfeatures2d.hpp> // This is not included by defualt from OpenCV 3, please build from source with OpenCV Contrib repo
 
 #include "quad_matcher.h"
 #include "stereo_motion_estimator.h"
 #include "viso2_eigen.h"
 
 #include <chrono>
+
+#include<opencv2/core/version.hpp>
+#if CV_VERSION_MAJOR == 4
+    #define CV_AA cv::LINE_AA
+#endif
 
 #define USE_FAST
 // #define USE_BRISK  // VERY SLOW

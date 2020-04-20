@@ -37,7 +37,7 @@ find_package(catkin REQUIRED COMPONENTS
   dutils_profiler
 )
 
-find_package(OpenCV REQUIRED)
+find_package(OpenCV 4 REQUIRED)
 find_package(Eigen3 REQUIRED)
 find_package(Boost REQUIRED COMPONENTS signals thread)
 
@@ -81,7 +81,7 @@ target_include_directories( stereo_odometer
 # message("libviso2_eigen_LIBRARIES=${libviso2_eigen_LIBRARIES}")
 # message("catkin_LIBRARIES=${catkin_LIBRARIES}")
 
-target_link_libraries(stereo_odometer ${Boost_LIBRARIES} ${catkin_LIBRARIES})
+target_link_libraries(stereo_odometer ${Boost_LIBRARIES} ${OpenCV_LIBRARIES} ${catkin_LIBRARIES})
 
 # target_link_libraries(ros_publisher ${Boost_LIBRARIES} ${catkin_LIBRARIES})
 

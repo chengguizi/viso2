@@ -75,6 +75,15 @@
         "fstream": "cpp",
         "sstream": "cpp",
         "core": "cpp",
-        "deque": "cpp"
+        "deque": "cpp",
+        "hash_map": "cpp",
+        "complex": "cpp",
+        "map": "cpp",
+        "memory_resource": "cpp",
+        "optional": "cpp",
+        "set": "cpp",
+        "string_view": "cpp",
+        "iomanip": "cpp",
+        "cfenv": "cpp"
     }
 }
